@@ -1,5 +1,5 @@
 # sademaksit
-sateen maksimit pikseleittäin eri aikajänteillä
+Statistical indicators of radar QPE over moving temporal windows 
 
 -----
 
