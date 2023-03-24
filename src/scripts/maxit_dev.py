@@ -6,21 +6,25 @@ import rioxarray
 import pyart
 from pyart.graph.common import generate_radar_time_begin
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 
 from radproc.aliases import zh, lwe
-from radproc.visual import plot_ppi
 from radproc.radar import z_r_qpe
 
 
 LWE_SCALE_FACTOR = 0.01
-LWE_FILL_VALUE = np.iinfo(np.uint16).max
+UINT16_FILLVAL = np.iinfo(np.uint16).max
 DEFAULT_ENCODING = {lwe: {'zlib': True, 'dtype': 'u2', 'scale_factor': LWE_SCALE_FACTOR}}
 ATTRS = {lwe: {'units': 'mm h-1',
-               '_FillValue': LWE_FILL_VALUE}}
+               '_FillValue': UINT16_FILLVAL},
+         'time': {'_FillValue': UINT16_FILLVAL}}
 CACHE_DIR = os.path.expanduser('~/.cache/sademaksit')
 os.makedirs(CACHE_DIR, exist_ok=True)
+
+
+def clear_cache():
+    for path in glob(os.path.join(CACHE_DIR, '*')):
+        os.remove(path)
 
 
 def basic_gatefilter(radar, field=zh):
@@ -36,7 +40,7 @@ def select_center(da, size=2048):
     return da[:, ystart:ystart+size, xstart:xstart+size].copy()
 
 
-def precip_grid(radar, outfile, size=2048, resolution=250):
+def save_precip_grid(radar, outfile, size=2048, resolution=250):
     gf = basic_gatefilter(radar)
     intermsize = int(size*2)
     grid_shape = (1, intermsize, intermsize)
@@ -49,13 +53,15 @@ def precip_grid(radar, outfile, size=2048, resolution=250):
     rds = grid.to_xarray().isel(z=0).set_index(x='lon', y='lat').reset_coords(drop=True)
     rda = rds.lwe_precipitation_rate
     rda.rio.write_crs(4326, inplace=True)
-    rda3067 = rda.rio.reproject("epsg:3067", resolution=resolution, nodata=LWE_FILL_VALUE)
+    rda3067 = rda.rio.reproject("epsg:3067", resolution=resolution, nodata=UINT16_FILLVAL)
     rda3067 = select_center(rda3067, size=size)
     rda3067.to_dataset().to_netcdf(outfile, encoding=DEFAULT_ENCODING)
 
 
 if __name__ == '__main__':
     plt.close('all')
+    size = 512
+    resolution = 1000
     win = 12
     chunksize = 128
     ignore_cache = False
@@ -67,12 +73,12 @@ if __name__ == '__main__':
         radar = pyart.aux_io.read_odim_h5(fpath)
         t = generate_radar_time_begin(radar)
         ts = t.strftime('%Y%m%d%H%M')
-        outfile = os.path.join(CACHE_DIR, f'tstep{ts}.nc')
+        outfile = os.path.join(CACHE_DIR, f'tstep{ts}_{size}x{resolution}m.nc')
         if os.path.isfile(outfile) and not ignore_cache:
             continue
         z_r_qpe(radar)
-        precip_grid(radar, outfile, size=512, resolution=1000)
-    ncglob = os.path.join(CACHE_DIR, 'tstep*.nc')
+        save_precip_grid(radar, outfile, size=size, resolution=resolution)
+    ncglob = os.path.join(CACHE_DIR, f'tstep*_{size}x{resolution}m.nc')
     rds = xr.open_mfdataset(ncglob, chunks=chunks, data_vars='minimal', engine='rasterio')
     rds['time'] = rds.indexes['time'].round('min')
     accums = (rds[lwe].rolling({'time': win}).sum()[win-1:]/12).to_dataset()
@@ -80,9 +86,10 @@ if __name__ == '__main__':
     dat['time'] = accums[lwe].idxmax('time')
     tstamp = accums.time[-1].item().strftime('%Y%m%d')
     cachenc = os.path.join(CACHE_DIR, f'{tstamp}.nc')
-    dat[lwe].attrs = ATTRS[lwe]
+    dat[lwe].attrs.update(ATTRS[lwe])
     dat.to_netcdf(cachenc, encoding=DEFAULT_ENCODING)
     datrio = rioxarray.open_rasterio(cachenc).rio.write_crs(3067)
+    datrio['time'].attrs.update(ATTRS['time'])
     tif1h = os.path.join(resultsdir, f'{tstamp}_max1h.tif')
     tif1htime = os.path.join(resultsdir, f'{tstamp}_max1h_time.tif')
     datrio[lwe].rio.to_raster(tif1h, dtype='uint16')
