@@ -64,7 +64,7 @@ if __name__ == '__main__':
     plt.close('all')
     size = 512
     resolution = 1000
-    win = '1H'
+    win = '1D'
     date = datetime.date(2022, 6, 4)
     chunksize = 128
     ignore_cache = False
@@ -101,7 +101,7 @@ if __name__ == '__main__':
     dat.to_netcdf(cachenc, encoding=DEFAULT_ENCODING)
     datrio = rioxarray.open_rasterio(cachenc).rio.write_crs(3067)
     datrio['time'].attrs.update(ATTRS['time'])
-    tif1h = os.path.join(resultsdir, f'{tstamp}_max1h.tif')
-    tif1htime = os.path.join(resultsdir, f'{tstamp}_max1h_time.tif')
+    tif1h = os.path.join(resultsdir, f'{tstamp}_max{win}.tif')
+    tif1htime = os.path.join(resultsdir, f'{tstamp}_max{win}_time.tif')
     datrio[lwe].rio.to_raster(tif1h, dtype='uint16')
     datrio['time'].rio.to_raster(tif1htime, dtype='uint16')
