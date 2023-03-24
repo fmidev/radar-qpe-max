@@ -1,4 +1,5 @@
 import os
+import datetime
 from glob import glob
 
 import xarray as xr
@@ -6,6 +7,7 @@ import rioxarray
 import pyart
 from pyart.graph.common import generate_radar_time_begin
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 
 from radproc.aliases import zh, lwe
@@ -62,9 +64,11 @@ if __name__ == '__main__':
     plt.close('all')
     size = 512
     resolution = 1000
-    win = 12
+    win = '1H'
+    date = datetime.date(2022, 6, 4)
     chunksize = 128
     ignore_cache = False
+    #
     chunks = {'x': chunksize, 'y': chunksize}
     datadir = os.path.expanduser('~/data/alakulma')
     resultsdir = os.path.expanduser('~/results/sademaksit')
@@ -80,11 +84,18 @@ if __name__ == '__main__':
         save_precip_grid(radar, outfile, size=size, resolution=resolution)
     ncglob = os.path.join(CACHE_DIR, f'tstep*_{size}x{resolution}m.nc')
     rds = xr.open_mfdataset(ncglob, chunks=chunks, data_vars='minimal', engine='rasterio')
-    rds['time'] = rds.indexes['time'].round('min')
-    accums = (rds[lwe].rolling({'time': win}).sum()[win-1:]/12).to_dataset()
+    iwin = rds.time.groupby(rds.time.dt.floor(win)).sizes['time']
+    dwin = pd.to_timedelta(win)
+    t_round = rds.indexes['time'].round('min')
+    tdelta = pd.to_timedelta(t_round.freq)
+    tstep_last = pd.to_datetime(date+datetime.timedelta(days=1))-tdelta
+    tstep_pre = pd.to_datetime(date)-dwin+tdelta
+    rds['time'] = t_round.to_datetimeindex()
+    rollsel = rds.sel(time=slice(tstep_pre, tstep_last))
+    accums = (rollsel[lwe].rolling({'time': iwin}).sum()/12).to_dataset()
     dat = accums.max('time')
     dat['time'] = accums[lwe].idxmax('time')
-    tstamp = accums.time[-1].item().strftime('%Y%m%d')
+    tstamp = accums.time[-1].dt.strftime('%Y%m%d').item()
     cachenc = os.path.join(CACHE_DIR, f'{tstamp}.nc')
     dat[lwe].attrs.update(ATTRS[lwe])
     dat.to_netcdf(cachenc, encoding=DEFAULT_ENCODING)
