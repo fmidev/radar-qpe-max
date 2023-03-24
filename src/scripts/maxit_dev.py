@@ -74,6 +74,7 @@ if __name__ == '__main__':
         precip_grid(radar, outfile, size=512, resolution=1000)
     ncglob = os.path.join(CACHE_DIR, 'tstep*.nc')
     rds = xr.open_mfdataset(ncglob, chunks=chunks, data_vars='minimal', engine='rasterio')
+    rds['time'] = rds.indexes['time'].round('min')
     accums = (rds[lwe].rolling({'time': win}).sum()[win-1:]/12).to_dataset()
     dat = accums.max('time')
     dat['time'] = accums[lwe].idxmax('time')
@@ -82,5 +83,7 @@ if __name__ == '__main__':
     dat[lwe].attrs = ATTRS[lwe]
     dat.to_netcdf(cachenc, encoding=DEFAULT_ENCODING)
     datrio = rioxarray.open_rasterio(cachenc).rio.write_crs(3067)
-    tif = os.path.join(resultsdir, f'{tstamp}_max1h.tif')
-    datrio[lwe].rio.to_raster(tif, dtype='uint16')
+    tif1h = os.path.join(resultsdir, f'{tstamp}_max1h.tif')
+    tif1htime = os.path.join(resultsdir, f'{tstamp}_max1h_time.tif')
+    datrio[lwe].rio.to_raster(tif1h, dtype='uint16')
+    datrio['time'].rio.to_raster(tif1htime, dtype='uint16')
