@@ -9,6 +9,7 @@ from pyart.graph.common import generate_radar_time_begin
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from pyproj import Proj
 
 from radproc.aliases import zh, lwe
 from radproc.radar import z_r_qpe
@@ -60,6 +61,22 @@ def save_precip_grid(radar, outfile, size=2048, resolution=250):
     rda3067.to_dataset().to_netcdf(outfile, encoding=DEFAULT_ENCODING)
 
 
+def save_precip_grid2(radar, outfile, size=2048, resolution=250):
+    gf = basic_gatefilter(radar)
+    r_m = size*resolution
+    grid_shape = (1, size, size)
+    grid_limits = ((0, 5000), (-r_m, r_m), (-r_m, r_m))
+    p = Proj(3067)
+    grid = pyart.map.grid_from_radars(radar, gatefilters=gf,
+                                      grid_shape=grid_shape,
+                                      grid_limits=grid_limits,
+                                      fields=[lwe], projection=p.definition,
+                                      projection_proj=p)
+    rds = grid.to_xarray().isel(z=0).reset_coords(drop=True)
+    rda = rds[lwe].rio.write_crs(3067)
+    rda.to_dataset().to_netcdf(outfile, encoding=DEFAULT_ENCODING)
+
+
 if __name__ == '__main__':
     plt.close('all')
     size = 512
@@ -81,7 +98,7 @@ if __name__ == '__main__':
         if os.path.isfile(outfile) and not ignore_cache:
             continue
         z_r_qpe(radar)
-        save_precip_grid(radar, outfile, size=size, resolution=resolution)
+        save_precip_grid2(radar, outfile, size=size, resolution=resolution)
     ncglob = os.path.join(CACHE_DIR, f'tstep*_{size}x{resolution}m.nc')
     rds = xr.open_mfdataset(ncglob, chunks=chunks, data_vars='minimal', engine='rasterio')
     iwin = rds.time.groupby(rds.time.dt.floor(win)).sizes['time']
