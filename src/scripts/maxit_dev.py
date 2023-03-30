@@ -9,11 +9,13 @@ from pyart.graph.common import generate_radar_time_begin
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from pyproj import Transformer
 
 from radproc.aliases import zh, lwe
 from radproc.radar import z_r_qpe
 
 
+PYART_AEQD_FMT='+proj=aeqd +lon_0={lon} +lat_0={lat} +R=6370997'
 LWE_SCALE_FACTOR = 0.01
 UINT16_FILLVAL = np.iinfo(np.uint16).max
 DEFAULT_ENCODING = {lwe: {'zlib': True, 'dtype': 'u2', 'scale_factor': LWE_SCALE_FACTOR}}
@@ -42,6 +44,12 @@ def select_center(da, size=2048):
     return da[:, ystart:ystart+size, xstart:xstart+size].copy()
 
 
+def pyart_aeqd(radar):
+    lat = radar.latitude['data'][0]
+    lon = radar.longitude['data'][0]
+    return PYART_AEQD_FMT.format(lat=lat, lon=lon)
+
+
 def save_precip_grid(radar, outfile, size=2048, resolution=250):
     gf = basic_gatefilter(radar)
     intermsize = int(size*2)
@@ -58,6 +66,23 @@ def save_precip_grid(radar, outfile, size=2048, resolution=250):
     rda3067 = rda.rio.reproject("epsg:3067", resolution=resolution, nodata=UINT16_FILLVAL)
     rda3067 = select_center(rda3067, size=size)
     rda3067.to_dataset().to_netcdf(outfile, encoding=DEFAULT_ENCODING)
+
+
+def save_precip_grid2(radar, outfile, size=2048, resolution=250):
+    gf = basic_gatefilter(radar)
+    r_m = size*resolution
+    grid_shape = (1, size, size)
+    grid_limits = ((0, 5000), (-r_m, r_m), (-r_m, r_m))
+    grid = pyart.map.grid_from_radars(radar, gatefilters=gf, grid_shape=grid_shape,
+                                      grid_limits=grid_limits, fields=[lwe])
+    rds = grid.to_xarray().isel(z=0).reset_coords(drop=True)
+    transproj = Transformer.from_crs(pyart_aeqd(radar), 'EPSG:3067')
+    x, y = transproj.transform(rds.x, rds.y)
+    rds['x'] = x
+    rds['y'] = y
+    rda = rds[lwe]
+    rda.rio.write_crs(3067, inplace=True)
+    rda.to_dataset().to_netcdf(outfile, encoding=DEFAULT_ENCODING)
 
 
 if __name__ == '__main__':
@@ -81,16 +106,16 @@ if __name__ == '__main__':
         if os.path.isfile(outfile) and not ignore_cache:
             continue
         z_r_qpe(radar)
-        save_precip_grid(radar, outfile, size=size, resolution=resolution)
+        save_precip_grid2(radar, outfile, size=size, resolution=resolution)
     ncglob = os.path.join(CACHE_DIR, f'tstep*_{size}x{resolution}m.nc')
-    rds = xr.open_mfdataset(ncglob, chunks=chunks, data_vars='minimal', engine='rasterio')
+    rds = xr.open_mfdataset(ncglob, chunks=chunks, data_vars='minimal')#, engine='rasterio')
     iwin = rds.time.groupby(rds.time.dt.floor(win)).sizes['time']
     dwin = pd.to_timedelta(win)
     t_round = rds.indexes['time'].round('min')
-    tdelta = pd.to_timedelta(t_round.freq)
+    tdelta = pd.to_timedelta('5min') # TODO
     tstep_last = pd.to_datetime(date+datetime.timedelta(days=1))-tdelta
     tstep_pre = pd.to_datetime(date)-dwin+tdelta
-    rds['time'] = t_round.to_datetimeindex()
+    rds['time'] = t_round#.to_datetimeindex()
     rollsel = rds.sel(time=slice(tstep_pre, tstep_last))
     accums = (rollsel[lwe].rolling({'time': iwin}).sum()/12).to_dataset()
     dat = accums.max('time')
