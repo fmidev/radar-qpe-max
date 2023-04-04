@@ -92,7 +92,7 @@ if __name__ == '__main__':
     win = '1D'
     date = datetime.date(2022, 6, 4)
     chunksize = 128
-    ignore_cache = False
+    ignore_cache = True
     #
     chunks = {'x': chunksize, 'y': chunksize}
     datadir = os.path.expanduser('~/data/alakulma')
@@ -108,25 +108,27 @@ if __name__ == '__main__':
         z_r_qpe(radar)
         save_precip_grid2(radar, outfile, size=size, resolution=resolution)
     ncglob = os.path.join(CACHE_DIR, f'tstep*_{size}x{resolution}m.nc')
-    rds = xr.open_mfdataset(ncglob, chunks=chunks, data_vars='minimal')#, engine='rasterio')
+    rds = xr.open_mfdataset(ncglob, chunks=chunks, data_vars='minimal')
     iwin = rds.time.groupby(rds.time.dt.floor(win)).sizes['time']
     dwin = pd.to_timedelta(win)
     t_round = rds.indexes['time'].round('min')
-    tdelta = pd.to_timedelta('5min') # TODO
+    rds['time'] = t_round
+    rds = rds.convert_calendar(calendar='standard', use_cftime=True)
+    tdelta = pd.to_timedelta(rds.indexes['time'].freq)
     tstep_last = pd.to_datetime(date+datetime.timedelta(days=1))-tdelta
     tstep_pre = pd.to_datetime(date)-dwin+tdelta
-    rds['time'] = t_round#.to_datetimeindex()
     rollsel = rds.sel(time=slice(tstep_pre, tstep_last))
     accums = (rollsel[lwe].rolling({'time': iwin}).sum()/12).to_dataset()
-    dat = accums.max('time')
+    dat = accums.max('time').rio.write_crs(3067)
     dat['time'] = accums[lwe].idxmax('time')
     tstamp = accums.time[-1].dt.strftime('%Y%m%d').item()
-    cachenc = os.path.join(CACHE_DIR, f'{tstamp}.nc')
     dat[lwe].attrs.update(ATTRS[lwe])
-    dat.to_netcdf(cachenc, encoding=DEFAULT_ENCODING)
-    datrio = rioxarray.open_rasterio(cachenc).rio.write_crs(3067)
-    datrio['time'].attrs.update(ATTRS['time'])
+    dat['time'].attrs.update(ATTRS['time'])
+    dat.rio.write_coordinate_system(inplace=True)
     tif1h = os.path.join(resultsdir, f'{tstamp}_max{win}.tif')
     tif1htime = os.path.join(resultsdir, f'{tstamp}_max{win}_time.tif')
-    datrio[lwe].rio.to_raster(tif1h, dtype='uint16')
-    datrio['time'].rio.to_raster(tif1htime, dtype='uint16')
+    dat = dat.compute()
+    tunits = 'minutes since ' + str(dat.time.min().item())
+    dat.rio.update_encoding({'time': {'units': tunits, 'calendar': 'proleptic_gregorian'}}, inplace=True)
+    dat[lwe].rio.to_raster(tif1h, dtype='uint16')
+    dat['time'].rio.to_raster(tif1htime, dtype='uint16')
