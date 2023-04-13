@@ -70,7 +70,7 @@ def save_precip_grid(radar, outfile, size=2048, resolution=250):
 
 def save_precip_grid2(radar, outfile, size=2048, resolution=250):
     gf = basic_gatefilter(radar)
-    r_m = size*resolution
+    r_m = size*resolution/2
     grid_shape = (1, size, size)
     grid_limits = ((0, 5000), (-r_m, r_m), (-r_m, r_m))
     grid = pyart.map.grid_from_radars(radar, gatefilters=gf, grid_shape=grid_shape,
@@ -129,6 +129,8 @@ if __name__ == '__main__':
     tif1htime = os.path.join(resultsdir, f'{tstamp}_max{win}_time.tif')
     dat = dat.compute()
     tunits = 'minutes since ' + str(dat.time.min().item())
-    dat.rio.update_encoding({'time': {'units': tunits, 'calendar': 'proleptic_gregorian'}}, inplace=True)
+    tenc = {'time': {'units': tunits, 'calendar': 'proleptic_gregorian'}}
+    dat.rio.update_encoding(tenc, inplace=True)
     dat[lwe].rio.to_raster(tif1h, dtype='uint16')
     dat['time'].rio.to_raster(tif1htime, dtype='uint16')
+    rioxarray.open_rasterio(tif1htime).rio.update_attrs({'units': tunits}).rio.to_raster(tif1htime)
