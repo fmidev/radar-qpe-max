@@ -85,19 +85,9 @@ def save_precip_grid2(radar, outfile, size=2048, resolution=250):
     rda.to_dataset().to_netcdf(outfile, encoding=DEFAULT_ENCODING)
 
 
-if __name__ == '__main__':
-    plt.close('all')
-    size = 512
-    resolution = 1000
-    win = '1D'
-    date = datetime.date(2022, 6, 4)
-    chunksize = 128
-    ignore_cache = True
-    #
+def maxit(h5paths, resultsdir, size=2048, resolution=250, win='1D',
+          chunksize=128, ignore_cache=False):
     chunks = {'x': chunksize, 'y': chunksize}
-    datadir = os.path.expanduser('~/data/alakulma')
-    resultsdir = os.path.expanduser('~/results/sademaksit')
-    h5paths = sorted(glob(os.path.join(datadir, '*-A.h5')))
     for fpath in h5paths:
         radar = pyart.aux_io.read_odim_h5(fpath)
         t = generate_radar_time_begin(radar)
@@ -134,3 +124,13 @@ if __name__ == '__main__':
     dat[lwe].rio.to_raster(tif1h, dtype='uint16')
     dat['time'].rio.to_raster(tif1htime, dtype='uint16')
     rioxarray.open_rasterio(tif1htime).rio.update_attrs({'units': tunits}).rio.to_raster(tif1htime)
+
+
+if __name__ == '__main__':
+    plt.close('all')
+    date = datetime.date(2022, 6, 4)
+    #
+    resultsdir = os.path.expanduser('~/results/sademaksit')
+    datadir = os.path.expanduser('~/data/alakulma')
+    h5paths = sorted(glob(os.path.join(datadir, '*-A.h5')))
+    maxit(h5paths, resultsdir, size=512, resolution=1000)
