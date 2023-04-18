@@ -52,24 +52,6 @@ def pyart_aeqd(radar):
 
 def save_precip_grid(radar, outfile, size=2048, resolution=250):
     gf = basic_gatefilter(radar)
-    intermsize = int(size*2)
-    grid_shape = (1, intermsize, intermsize)
-    r_m = size*resolution*0.625 # includes reprojection margin
-    grid_limits = ((0, 5000), (-r_m, r_m), (-r_m, r_m))
-    grid = pyart.map.grid_from_radars(radar, gatefilters=gf,
-                                      grid_shape=grid_shape,
-                                      grid_limits=grid_limits,
-                                      fields=[lwe])
-    rds = grid.to_xarray().isel(z=0).set_index(x='lon', y='lat').reset_coords(drop=True)
-    rda = rds.lwe_precipitation_rate
-    rda.rio.write_crs(4326, inplace=True)
-    rda3067 = rda.rio.reproject("epsg:3067", resolution=resolution, nodata=UINT16_FILLVAL)
-    rda3067 = select_center(rda3067, size=size)
-    rda3067.to_dataset().to_netcdf(outfile, encoding=DEFAULT_ENCODING)
-
-
-def save_precip_grid2(radar, outfile, size=2048, resolution=250):
-    gf = basic_gatefilter(radar)
     r_m = size*resolution/2
     grid_shape = (1, size, size)
     grid_limits = ((0, 5000), (-r_m, r_m), (-r_m, r_m))
@@ -97,7 +79,7 @@ def maxit(h5paths, resultsdir, size=2048, resolution=250, win='1D',
         if os.path.isfile(outfile) and not ignore_cache:
             continue
         z_r_qpe(radar)
-        save_precip_grid2(radar, outfile, size=size, resolution=resolution)
+        save_precip_grid(radar, outfile, size=size, resolution=resolution)
     ncglob = os.path.join(CACHE_DIR, f'tstep*_{size}x{resolution}m.nc')
     rds = xr.open_mfdataset(ncglob, chunks=chunks, data_vars='minimal')
     iwin = rds.time.groupby(rds.time.dt.floor(win)).sizes['time']
