@@ -12,22 +12,23 @@ import matplotlib.pyplot as plt
 from pyproj import Transformer
 
 from radproc.aliases import zh, lwe
-from radproc.radar import z_r_qpe
+from radproc.radar import z_r_qpe, source2dict
 
 
 ACC = 'lwe_accum'
 PYART_AEQD_FMT = '+proj={proj} +lon_0={lon_0} +lat_0={lat_0} +R={R}'
-QPE_CACHE_FMT = 'tstep{ts}_{size}x{resolution}m.nc'
+QPE_CACHE_FMT = 'tstep{ts}_{size}px{resolution}m.nc'
 LWE_SCALE_FACTOR = 0.01
 UINT16_FILLVAL = np.iinfo(np.uint16).max
 DEFAULT_ENCODING = {lwe: {'zlib': True,
+                          '_FillValue': UINT16_FILLVAL,
                           'dtype': 'u2',
                           'scale_factor': LWE_SCALE_FACTOR}}
 ATTRS = {ACC: {'units': 'mm',
                'standard_name': 'lwe_thickness_of_precipitation_amount',
                'long_name': 'maximum precipitation accumulation',
                '_FillValue': UINT16_FILLVAL},
-         'time': {'long_name': 'start time of maximum precipitation accumulation period',
+         'time': {'long_name': 'end time of maximum precipitation accumulation period',
                   '_FillValue': UINT16_FILLVAL}}
 CACHE_DIR = os.path.expanduser('~/.cache/sademaksit')
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -70,9 +71,11 @@ def save_precip_grid(radar, outfile, size=2048, resolution=250):
     x, y = transproj.transform(rds.x, rds.y)
     rds['x'] = x
     rds['y'] = y
-    rda = rds[lwe]
+    rda = rds[lwe].fillna(0)
     rda.rio.write_crs(3067, inplace=True)
-    rda.to_dataset().to_netcdf(outfile, encoding=DEFAULT_ENCODING)
+    rda = rda.to_dataset()
+    rda.attrs.update(source2dict(radar))
+    rda.to_netcdf(outfile, encoding=DEFAULT_ENCODING)
 
 
 def qpe_grids_caching(h5paths, size, resolution, ignore_cache):
@@ -90,11 +93,13 @@ def qpe_grids_caching(h5paths, size, resolution, ignore_cache):
 
 def maxit(h5paths, resultsdir, size=2048, resolution=250, win='1 D',
           chunksize=128, ignore_cache=False):
+    # takes forever with small chunksize
     chunks = {'x': chunksize, 'y': chunksize}
     qpe_grids_caching(h5paths, size, resolution, ignore_cache)
     globstr = QPE_CACHE_FMT.format(ts='*', size=size, resolution=resolution)
     ncglob = os.path.join(CACHE_DIR, globstr)
-    rds = xr.open_mfdataset(ncglob, chunks=chunks, data_vars='minimal')
+    rds = xr.open_mfdataset(ncglob, chunks=chunks, data_vars='minimal',
+                            engine='h5netcdf', parallel=True)
     iwin = rds.time.groupby(rds.time.dt.floor(win)).sizes['time']
     dwin = pd.to_timedelta(win)
     win_trim = win.replace(' ', '').lower()
@@ -113,14 +118,16 @@ def maxit(h5paths, resultsdir, size=2048, resolution=250, win='1 D',
     dat[ACC].attrs.update(ATTRS[ACC])
     acc_cell = {'cell_methods': f'time: maximum (interval: {win.lower()})'}
     dat[ACC].attrs.update(acc_cell)
+    dat[ACC].attrs.update(rds.attrs)
+    dat['time'].attrs.update(rds.attrs)
     dat['time'].attrs.update(ATTRS['time'])
     dat.rio.write_coordinate_system(inplace=True)
     tif1h = os.path.join(resultsdir, f"{tstamp}_max{win_trim}.tif")
     tif1htime = os.path.join(resultsdir, f'{tstamp}_max{win_trim}_time.tif')
     dat = dat.compute()
     tunits = 'minutes since ' + str(dat.time.min().item())
-    tenc = {'time': {'units': tunits, 'calendar': 'proleptic_gregorian'}}
-    dat.rio.update_encoding(tenc, inplace=True)
+    enc = {'time': {'units': tunits, 'calendar': 'proleptic_gregorian'}}
+    dat.rio.update_encoding(enc, inplace=True)
     dat[ACC].rio.to_raster(tif1h, dtype='uint16', compress='deflate')
     dat['time'].rio.to_raster(tif1htime, dtype='uint16', compress='deflate')
     unidat = rioxarray.open_rasterio(tif1htime).rio.update_attrs({'units': tunits})
@@ -135,4 +142,4 @@ if __name__ == '__main__':
     resultsdir = os.path.expanduser('~/results/sademaksit')
     datadir = os.path.expanduser('~/data/alakulma')
     h5paths = sorted(glob(os.path.join(datadir, '*-A.h5')))
-    maxit(h5paths, resultsdir)#, size=512, resolution=1000, ignore_cache=True)
+    maxit(h5paths, resultsdir, size=256, resolution=2000, ignore_cache=True)
