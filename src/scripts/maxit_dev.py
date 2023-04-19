@@ -92,8 +92,15 @@ def qpe_grids_caching(h5paths, size, resolution, ignore_cache):
 
 
 def maxit(h5paths, resultsdir, size=2048, resolution=250, win='1 D',
-          chunksize=128, ignore_cache=False):
+          chunksize=None, ignore_cache=False):
     # takes forever with small chunksize
+    if chunksize is None:
+        if size > 1500:
+            chunksize = 128 # to limit memory usage
+        elif size > 250:
+            chunksize = 256
+        else:
+            chunksize = size
     chunks = {'x': chunksize, 'y': chunksize}
     qpe_grids_caching(h5paths, size, resolution, ignore_cache)
     globstr = QPE_CACHE_FMT.format(ts='*', size=size, resolution=resolution)
