@@ -1,5 +1,6 @@
 import os
 import datetime
+import logging
 from glob import glob
 
 import xarray as xr
@@ -32,6 +33,13 @@ ATTRS = {ACC: {'units': 'mm',
                   '_FillValue': UINT16_FILLVAL}}
 CACHE_DIR = os.path.expanduser('~/.cache/sademaksit')
 os.makedirs(CACHE_DIR, exist_ok=True)
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+if not logger.hasHandlers():
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+    logger.addHandler(ch)
 
 
 def clear_cache():
@@ -98,11 +106,18 @@ def maxit(h5paths, resultsdir, size=2048, resolution=250, win='1 D',
         else:
             chunksize = size
     chunks = {'x': chunksize, 'y': chunksize}
+    spatialchuncks = chunks.copy()
+    logger.info('Updating precipitation raster cache.')
     nod = qpe_grids_caching(h5paths, size, resolution, ignore_cache)
     globstr = QPE_CACHE_FMT.format(ts='*', nod=nod, size=size, resolution=resolution)
     ncglob = os.path.join(CACHE_DIR, globstr)
+    logger.info('Loading cached precipitation rasters.')
     rds = xr.open_mfdataset(ncglob, chunks=chunks, data_vars='minimal',
                             engine='h5netcdf', parallel=True)
+    logger.info('Loaded.')
+    chunks.update({'time': rds.dims['time']})
+    rds = rds.chunk(chunks)
+    logger.debug(rds.chunks)
     iwin = rds.time.groupby(rds.time.dt.floor(win)).sizes['time']
     dwin = pd.to_timedelta(win)
     win_trim = win.replace(' ', '').lower()
@@ -116,7 +131,12 @@ def maxit(h5paths, resultsdir, size=2048, resolution=250, win='1 D',
     accums = (rollsel[lwe].rolling({'time': iwin}).sum()/12).to_dataset()
     accums = accums.rename({lwe: ACC})
     dat = accums.max('time').rio.write_crs(3067)
-    dat['time'] = accums[ACC].idxmax(dim='time', keep_attrs=True)
+    dat['time'] = accums[ACC].idxmax(dim='time', keep_attrs=True).chunk(spatialchuncks)
+    logger.debug(dat)
+    logger.debug(rds)
+    logger.debug(accums)
+    logger.debug(dat.chunks)
+    dat = dat.compute()
     tstamp = accums.time[-1].dt.strftime('%Y%m%d').item()
     dat[ACC].attrs.update(ATTRS[ACC])
     acc_cell = {'cell_methods': f'time: maximum (interval: {win.lower()})'}
@@ -128,7 +148,6 @@ def maxit(h5paths, resultsdir, size=2048, resolution=250, win='1 D',
     nod = rds.attrs['NOD']
     tifp = os.path.join(resultsdir, f'{nod}{tstamp}max{win_trim}{size}px{resolution}m.tif')
     tift = os.path.join(resultsdir, f'{nod}{tstamp}maxtime{win_trim}{size}px{resolution}m.tif')
-    dat = dat.compute()
     tunits = 'minutes since ' + str(dat.time.min().item())
     enc = {'time': {'units': tunits, 'calendar': 'proleptic_gregorian'}}
     dat.rio.update_encoding(enc, inplace=True)
@@ -140,10 +159,10 @@ def maxit(h5paths, resultsdir, size=2048, resolution=250, win='1 D',
 
 if __name__ == '__main__':
     plt.close('all')
-    clear_cache()
+    #clear_cache()
     date = datetime.date(2022, 6, 4)
     #
     resultsdir = os.path.expanduser('~/results/sademaksit')
     datadir = os.path.expanduser('~/data/alakulma')
     h5paths = sorted(glob(os.path.join(datadir, '*-A.h5')))
-    maxit(h5paths, resultsdir, size=256, resolution=2000, ignore_cache=True)
+    maxit(h5paths, resultsdir, size=1024, resolution=500)#, ignore_cache=True)
