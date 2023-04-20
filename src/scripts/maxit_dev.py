@@ -46,12 +46,6 @@ def basic_gatefilter(radar, field=zh):
     return gatefilter
 
 
-def select_center(da, size=2048):
-    xstart = int((da.x.size-size)/2)
-    ystart = int((da.y.size-size)/2)
-    return da[:, ystart:ystart+size, xstart:xstart+size].copy()
-
-
 def pyart_aeqd(radar):
     lat = radar.latitude['data'][0]
     lon = radar.longitude['data'][0]
