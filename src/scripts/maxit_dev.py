@@ -17,7 +17,7 @@ from radproc.radar import z_r_qpe, source2dict
 
 ACC = 'lwe_accum'
 PYART_AEQD_FMT = '+proj={proj} +lon_0={lon_0} +lat_0={lat_0} +R={R}'
-QPE_CACHE_FMT = 'tstep{ts}_{size}px{resolution}m.nc'
+QPE_CACHE_FMT = '{ts}{nod}{size}px{resolution}m.nc'
 LWE_SCALE_FACTOR = 0.01
 UINT16_FILLVAL = np.iinfo(np.uint16).max
 DEFAULT_ENCODING = {lwe: {'zlib': True,
@@ -77,12 +77,14 @@ def qpe_grids_caching(h5paths, size, resolution, ignore_cache):
         radar = pyart.aux_io.read_odim_h5(fpath)
         t = generate_radar_time_begin(radar)
         ts = t.strftime('%Y%m%d%H%M')
-        outfname = QPE_CACHE_FMT.format(ts=ts, size=size, resolution=resolution)
+        nod = source2dict(radar)['NOD']
+        outfname = QPE_CACHE_FMT.format(ts=ts, nod=nod, size=size, resolution=resolution)
         outfile = os.path.join(CACHE_DIR, outfname)
         if os.path.isfile(outfile) and not ignore_cache:
             continue
         z_r_qpe(radar)
         save_precip_grid(radar, outfile, size=size, resolution=resolution)
+    return nod
 
 
 def maxit(h5paths, resultsdir, size=2048, resolution=250, win='1 D',
@@ -96,8 +98,8 @@ def maxit(h5paths, resultsdir, size=2048, resolution=250, win='1 D',
         else:
             chunksize = size
     chunks = {'x': chunksize, 'y': chunksize}
-    qpe_grids_caching(h5paths, size, resolution, ignore_cache)
-    globstr = QPE_CACHE_FMT.format(ts='*', size=size, resolution=resolution)
+    nod = qpe_grids_caching(h5paths, size, resolution, ignore_cache)
+    globstr = QPE_CACHE_FMT.format(ts='*', nod=nod, size=size, resolution=resolution)
     ncglob = os.path.join(CACHE_DIR, globstr)
     rds = xr.open_mfdataset(ncglob, chunks=chunks, data_vars='minimal',
                             engine='h5netcdf', parallel=True)
@@ -123,16 +125,17 @@ def maxit(h5paths, resultsdir, size=2048, resolution=250, win='1 D',
     dat['time'].attrs.update(rds.attrs)
     dat['time'].attrs.update(ATTRS['time'])
     dat.rio.write_coordinate_system(inplace=True)
-    tif1h = os.path.join(resultsdir, f"{tstamp}_max{win_trim}.tif")
-    tif1htime = os.path.join(resultsdir, f'{tstamp}_max{win_trim}_time.tif')
+    nod = rds.attrs['NOD']
+    tifp = os.path.join(resultsdir, f'{nod}{tstamp}max{win_trim}{size}px{resolution}m.tif')
+    tift = os.path.join(resultsdir, f'{nod}{tstamp}maxtime{win_trim}{size}px{resolution}m.tif')
     dat = dat.compute()
     tunits = 'minutes since ' + str(dat.time.min().item())
     enc = {'time': {'units': tunits, 'calendar': 'proleptic_gregorian'}}
     dat.rio.update_encoding(enc, inplace=True)
-    dat[ACC].rio.to_raster(tif1h, dtype='uint16', compress='deflate')
-    dat['time'].rio.to_raster(tif1htime, dtype='uint16', compress='deflate')
-    unidat = rioxarray.open_rasterio(tif1htime).rio.update_attrs({'units': tunits})
-    unidat.rio.to_raster(tif1htime, compress='deflate')
+    dat[ACC].rio.to_raster(tifp, dtype='uint16', compress='deflate')
+    dat['time'].rio.to_raster(tift, dtype='uint16', compress='deflate')
+    unidat = rioxarray.open_rasterio(tift).rio.update_attrs({'units': tunits})
+    unidat.rio.to_raster(tift, compress='deflate')
 
 
 if __name__ == '__main__':
