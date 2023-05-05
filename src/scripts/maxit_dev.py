@@ -20,6 +20,7 @@ ACC = 'lwe_accum'
 PYART_AEQD_FMT = '+proj={proj} +lon_0={lon_0} +lat_0={lat_0} +R={R}'
 QPE_CACHE_FMT = '{ts}{nod}{size}px{resolution}m.nc'
 LWE_SCALE_FACTOR = 0.01
+DATEFMT = '%Y%m%d'
 UINT16_FILLVAL = np.iinfo(np.uint16).max
 DEFAULT_ENCODING = {lwe: {'zlib': True,
                           '_FillValue': UINT16_FILLVAL,
@@ -95,7 +96,16 @@ def qpe_grids_caching(h5paths, size, resolution, ignore_cache):
     return nod
 
 
-def maxit(h5paths, resultsdir, size=2048, resolution=250, win='1 D',
+def ls_low_elev(date, datadir, site='', globfmt='{date}*{site}*-A.h5'):
+    date0 = date - datetime.timedelta(days=1)
+    globstr0 = globfmt.format(date=date0.strftime(DATEFMT), site=site)
+    globstr1 = globfmt.format(date=date.strftime(DATEFMT), site=site)
+    ls = glob(os.path.join(datadir, globstr0))
+    ls.extend(glob(os.path.join(datadir, globstr1)))
+    return sorted(ls)
+
+
+def maxit(date, h5paths, resultsdir, size=2048, resolution=250, win='1 D',
           chunksize=None, ignore_cache=False):
     # takes forever with small chunksize
     if chunksize is None:
@@ -137,7 +147,7 @@ def maxit(h5paths, resultsdir, size=2048, resolution=250, win='1 D',
     logger.debug(accums)
     logger.debug(dat.chunks)
     dat = dat.compute()
-    tstamp = accums.time[-1].dt.strftime('%Y%m%d').item()
+    tstamp = accums.time[-1].dt.strftime(DATEFMT).item()
     dat[ACC].attrs.update(ATTRS[ACC])
     acc_cell = {'cell_methods': f'time: maximum (interval: {win.lower()})'}
     dat[ACC].attrs.update(acc_cell)
@@ -164,5 +174,5 @@ if __name__ == '__main__':
     #
     resultsdir = os.path.expanduser('~/results/sademaksit')
     datadir = os.path.expanduser('~/data/alakulma')
-    h5paths = sorted(glob(os.path.join(datadir, '*-A.h5')))
-    maxit(h5paths, resultsdir, size=1024, resolution=500)#, ignore_cache=True)
+    h5paths = ls_low_elev(date, datadir)
+    maxit(date, h5paths, resultsdir, size=1024, resolution=500)#, ignore_cache=True)
