@@ -23,7 +23,10 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
-dependencies = []
+dependencies = [
+  "rioxarray",
+  "radproc @ git+https://github.com/juhi24/radproc.git",
+]
 dynamic = ["version"]
 
 [project.urls]
@@ -60,3 +63,6 @@ exclude_lines = [
   "if __name__ == .__main__.:",
   "if TYPE_CHECKING:",
 ]
+
+[tool.hatch.metadata]
+allow-direct-references = true
