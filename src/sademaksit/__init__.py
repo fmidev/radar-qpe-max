@@ -39,11 +39,6 @@ CACHE_DIR = os.path.expanduser('~/.cache/sademaksit')
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-if not logger.hasHandlers():
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
-    logger.addHandler(ch)
 
 
 def clear_cache():
