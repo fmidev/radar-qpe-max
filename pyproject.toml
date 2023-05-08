@@ -34,6 +34,9 @@ dynamic = ["version"]
 #Issues = "https://github.com/unknown/sademaksit/issues"
 #Source = "https://github.com/unknown/sademaksit"
 
+[project.scripts]
+sademaksit = "sademaksit.ui:cli"
+
 [tool.hatch.version]
 source = "vcs"
 
