@@ -25,7 +25,7 @@ classifiers = [
 ]
 dependencies = [
   "rioxarray",
-  "radproc @ git+https://github.com/juhi24/radproc.git",
+  "radproc @ git+https://github.com/fmidev/radproc.git",
 ]
 dynamic = ["version"]
 
