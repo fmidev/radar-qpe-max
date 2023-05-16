@@ -57,6 +57,9 @@ def basic_gatefilter(radar, field=ZH):
 def pyart_aeqd(radar):
     lat = radar.latitude['data'][0]
     lon = radar.longitude['data'][0]
+    if isinstance(lat, np.ndarray):
+        lat = lat[0]
+        lon = lon[0]
     return dict(proj='aeqd', lat_0=lat, lon_0=lon, R=6370997)
 
 
@@ -99,7 +102,7 @@ def qpe_grids_caching(h5paths, size, resolution, ignore_cache, dbz_field=ZH):
     return nod
 
 
-def ls_low_elev(date, datadir, site='', globfmt='{date}*{site}*-A.h5'):
+def ls_low_elev(date, datadir, site='', globfmt='{date}*{site}*.h5'):
     date0 = date - datetime.timedelta(days=1)
     globstr0 = globfmt.format(date=date0.strftime(DATEFMT), site=site)
     globstr1 = globfmt.format(date=date.strftime(DATEFMT), site=site)
