@@ -3,7 +3,7 @@ import datetime
 
 import click
 
-from sademaksit import DATEFMT, ls_low_elev, maxit
+from sademaksit import DATEFMT, ls_low_elev, maxit, __version__
 
 
 @click.command()
@@ -14,6 +14,7 @@ from sademaksit import DATEFMT, ls_low_elev, maxit
 @click.option('-r', '--resolution', metavar='METRE', help='spatial resolution in meters')
 @click.option('-w', '--window', metavar='WIN', help='length of the time window, e.g. 1D for 1 day')
 @click.option('-z', '--dbz-field', metavar='FIELD', help='use FIELD for DBZ', default='DBZH')
+@click.version_option(version=__version__)
 def cli(yyyymmdd, input_dir, output_dir, size, resolution, dbz_field, window):
     if resolution is None:
         if size>1999:
