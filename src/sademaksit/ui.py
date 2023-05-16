@@ -12,8 +12,9 @@ from sademaksit import DATEFMT, ls_low_elev, maxit
 @click.option('-o', '--output-dir', metavar='DIR', help='write output here')
 @click.option('-s', '--size', metavar='PX', help='output raster size PX*PX', default=1024)
 @click.option('-r', '--resolution', metavar='METRE', help='spatial resolution in meters')
+@click.option('-w', '--window', metavar='WIN', help='length of the time window, e.g. 1D for 1 day')
 @click.option('-z', '--dbz-field', metavar='FIELD', help='use FIELD for DBZ', default='DBZH')
-def cli(yyyymmdd, input_dir, output_dir, size, resolution, dbz_field):
+def cli(yyyymmdd, input_dir, output_dir, size, resolution, dbz_field, window):
     if resolution is None:
         if size>1999:
             resolution = 250
@@ -26,4 +27,4 @@ def cli(yyyymmdd, input_dir, output_dir, size, resolution, dbz_field):
     date = datetime.datetime.strptime(yyyymmdd, DATEFMT)
     h5paths = ls_low_elev(date, input_dir)
     maxit(date, h5paths, output_dir, size=size, resolution=resolution,
-          dbz_field=dbz_field)
+          dbz_field=dbz_field, win=window)
