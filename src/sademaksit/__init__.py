@@ -14,11 +14,12 @@ import numpy as np
 import pandas as pd
 from pyproj import Transformer
 
-from radproc.aliases import zh, lwe
+from radproc.aliases import lwe
 from radproc.radar import z_r_qpe, source2dict
 from sademaksit._version import __version__
 
 
+zh = 'DBZH'
 ACC = 'lwe_accum'
 PYART_AEQD_FMT = '+proj={proj} +lon_0={lon_0} +lat_0={lat_0} +R={R}'
 QPE_CACHE_FMT = '{ts}{nod}{size}px{resolution}m.nc'
@@ -81,7 +82,9 @@ def save_precip_grid(radar, outfile, size=2048, resolution=250):
 
 def qpe_grids_caching(h5paths, size, resolution, ignore_cache):
     for fpath in h5paths:
-        radar = pyart.aux_io.read_odim_h5(fpath)
+        # read only the lowest elevation
+        radar = pyart.aux_io.read_odim_h5(fpath, include_datasets=['dataset1'],
+                                          file_field_names=True)
         t = generate_radar_time_begin(radar)
         ts = t.strftime('%Y%m%d%H%M')
         nod = source2dict(radar)['NOD']
