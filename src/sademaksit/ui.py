@@ -12,7 +12,7 @@ from sademaksit import DATEFMT, ls_low_elev, maxit, __version__
 @click.option('-o', '--output-dir', metavar='DIR', help='write output here')
 @click.option('-s', '--size', metavar='PX', help='output raster size PX*PX', default=1024)
 @click.option('-r', '--resolution', metavar='METRE', help='spatial resolution in meters')
-@click.option('-w', '--window', metavar='WIN', help='length of the time window, e.g. 1D for 1 day')
+@click.option('-w', '--window', metavar='WIN', help='length of the time window, e.g. 1D for 1 day', default='1 D')
 @click.option('-z', '--dbz-field', metavar='FIELD', help='use FIELD for DBZ', default='DBZH')
 @click.version_option(version=__version__)
 def cli(yyyymmdd, input_dir, output_dir, size, resolution, dbz_field, window):
