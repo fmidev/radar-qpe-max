@@ -142,7 +142,8 @@ def maxit(date, h5paths, resultsdir, size=2048, resolution=250, win='1 D',
     t_round = rds.indexes['time'].round('min')
     rds['time'] = t_round
     rds = rds.convert_calendar(calendar='standard', use_cftime=True)
-    tdelta = pd.to_timedelta(rds.indexes['time'].freq)
+    tind = rds.indexes['time']
+    tdelta = pd.to_timedelta(tind.freq) or pd.Series(tind).diff().median()
     tstep_last = pd.to_datetime(date+datetime.timedelta(days=1))-tdelta
     tstep_pre = pd.to_datetime(date)-dwin+tdelta
     rollsel = rds.sel(time=slice(tstep_pre, tstep_last))
