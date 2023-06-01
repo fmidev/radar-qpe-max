@@ -118,12 +118,14 @@ def qpe_grids_caching(h5paths, size, resolution, ignore_cache, resultsdir=None,
     return nod
 
 
-def ls_low_elev(date, datadir, site='', globfmt='{date}*{site}*.h5'):
+def ls_low_elev(date, site='', globfmt='{date}*{site}*.h5'):
+    def fmtglob(d):
+        return globfmt.format(yyyy=d.strftime('%Y'),
+                              mm=d.strftime('%m'), dd=d.strftime('%d'),
+                              date=d.strftime(DATEFMT), site=site)
     date0 = date - datetime.timedelta(days=1)
-    globstr0 = globfmt.format(date=date0.strftime(DATEFMT), site=site)
-    globstr1 = globfmt.format(date=date.strftime(DATEFMT), site=site)
-    ls = glob(os.path.join(datadir, globstr0))
-    ls.extend(glob(os.path.join(datadir, globstr1)))
+    ls = glob(fmtglob(date0))
+    ls.extend(glob(fmtglob(date)))
     return sorted(ls)
 
 
