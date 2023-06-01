@@ -5,7 +5,7 @@ import datetime
 from sademaksit import maxit, ls_low_elev
 
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('maksit')
 
 
 if __name__ == '__main__':

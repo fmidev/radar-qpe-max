@@ -22,7 +22,9 @@ from sademaksit._version import __version__
 ZH = 'DBZH'
 ACC = 'lwe_accum'
 PYART_AEQD_FMT = '+proj={proj} +lon_0={lon_0} +lat_0={lat_0} +R={R}'
-QPE_CACHE_FMT = '{ts}{nod}{size}px{resolution}m{corr}.nc'
+qpefmt = '{ts}{nod}{size}px{resolution}m{corr}'
+QPE_CACHE_FMT = qpefmt + '.nc'
+QPE_TIF_FMT = qpefmt + '.tif'
 LWE_SCALE_FACTOR = 0.01
 DATEFMT = '%Y%m%d'
 UINT16_FILLVAL = np.iinfo(np.uint16).max
@@ -32,14 +34,13 @@ DEFAULT_ENCODING = {lwe: {'zlib': True,
                           'scale_factor': LWE_SCALE_FACTOR}}
 ATTRS = {ACC: {'units': 'mm',
                'standard_name': 'lwe_thickness_of_precipitation_amount',
-               'long_name': 'maximum precipitation accumulation',
                '_FillValue': UINT16_FILLVAL},
          'time': {'long_name': 'end time of maximum precipitation accumulation period',
                   '_FillValue': UINT16_FILLVAL}}
 CACHE_DIR = os.path.expanduser('~/.cache/sademaksit')
 os.makedirs(CACHE_DIR, exist_ok=True)
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('maksit')
 
 
 def clear_cache():
@@ -63,7 +64,7 @@ def pyart_aeqd(radar):
     return dict(proj='aeqd', lat_0=lat, lon_0=lon, R=6370997)
 
 
-def save_precip_grid(radar, outfile, size=2048, resolution=250):
+def save_precip_grid(radar, cachefile, tiffile=None, size=2048, resolution=250):
     gf = basic_gatefilter(radar)
     r_m = size*resolution/2
     grid_shape = (1, size, size)
@@ -80,11 +81,21 @@ def save_precip_grid(radar, outfile, size=2048, resolution=250):
     rda.rio.write_crs(3067, inplace=True)
     rda = rda.to_dataset()
     rda.attrs.update(source2dict(radar))
-    rda.to_netcdf(outfile, encoding=DEFAULT_ENCODING)
+    rda.to_netcdf(cachefile, encoding=DEFAULT_ENCODING)
+    if isinstance(tiffile, str):
+        # TODO: hardcoded scan frequency assumption
+        acc = (rda.isel(time=0)[lwe]/12).rename(ACC)
+        acc.attrs.update(ATTRS[ACC])
+        acc.rio.update_encoding({'scale_factor': LWE_SCALE_FACTOR}, inplace=True)
+        acc.rio.to_raster(tiffile, dtype='uint16', compress='deflate')
 
 
-def qpe_grids_caching(h5paths, size, resolution, ignore_cache, dbz_field=ZH):
+def qpe_grids_caching(h5paths, size, resolution, ignore_cache, resultsdir=None,
+                      dbz_field=ZH):
     corr = '_c' if 'C' in dbz_field else ''
+    if isinstance(resultsdir, str):
+        tifdir = os.path.join(resultsdir, 'scan_accums')
+        os.makedirs(tifdir, exist_ok=True)
     for fpath in h5paths:
         # read only the lowest elevation
         radar = pyart.aux_io.read_odim_h5(fpath, include_datasets=['dataset1'],
@@ -92,13 +103,18 @@ def qpe_grids_caching(h5paths, size, resolution, ignore_cache, dbz_field=ZH):
         t = generate_radar_time_begin(radar)
         ts = t.strftime('%Y%m%d%H%M')
         nod = source2dict(radar)['NOD']
-        outfname = QPE_CACHE_FMT.format(ts=ts, nod=nod, size=size,
-                                        resolution=resolution, corr=corr)
-        outfile = os.path.join(CACHE_DIR, outfname)
-        if os.path.isfile(outfile) and not ignore_cache:
+        cachefname = QPE_CACHE_FMT.format(ts=ts, nod=nod, size=size,
+                                          resolution=resolution, corr=corr)
+        cachefile = os.path.join(CACHE_DIR, cachefname)
+        if isinstance(resultsdir, str):
+            tifname = QPE_TIF_FMT.format(ts=ts, nod=nod, size=size,
+                                         resolution=resolution, corr=corr)
+            tiffile = os.path.join(tifdir, tifname)
+        if os.path.isfile(cachefile) and not ignore_cache:
             continue
         z_r_qpe(radar, dbz_field=dbz_field)
-        save_precip_grid(radar, outfile, size=size, resolution=resolution)
+        save_precip_grid(radar, cachefile, tiffile=tiffile, size=size,
+                         resolution=resolution)
     return nod
 
 
@@ -125,7 +141,8 @@ def maxit(date, h5paths, resultsdir, size=2048, resolution=250, win='1 D',
     spatialchuncks = chunks.copy()
     corr = '_c' if 'C' in dbz_field else ''
     logger.info('Updating precipitation raster cache.')
-    nod = qpe_grids_caching(h5paths, size, resolution, ignore_cache, dbz_field=dbz_field)
+    nod = qpe_grids_caching(h5paths, size, resolution, ignore_cache,
+                            resultsdir=resultsdir, dbz_field=dbz_field)
     globstr = QPE_CACHE_FMT.format(ts='*', nod=nod, size=size,
                                    resolution=resolution, corr=corr)
     ncglob = os.path.join(CACHE_DIR, globstr)
@@ -147,6 +164,7 @@ def maxit(date, h5paths, resultsdir, size=2048, resolution=250, win='1 D',
     tstep_last = pd.to_datetime(date+datetime.timedelta(days=1))-tdelta
     tstep_pre = pd.to_datetime(date)-dwin+tdelta
     rollsel = rds.sel(time=slice(tstep_pre, tstep_last))
+    # TODO: document why divide by 12
     accums = (rollsel[lwe].rolling({'time': iwin}).sum()/12).to_dataset()
     accums = accums.rename({lwe: ACC})
     dat = accums.max('time').rio.write_crs(3067)
@@ -158,6 +176,7 @@ def maxit(date, h5paths, resultsdir, size=2048, resolution=250, win='1 D',
     dat = dat.compute()
     tstamp = accums.time[-1].dt.strftime(DATEFMT).item()
     dat[ACC].attrs.update(ATTRS[ACC])
+    dat[ACC].attrs.update({'long_name': 'maximum precipitation accumulation'})
     acc_cell = {'cell_methods': f'time: maximum (interval: {win.lower()})'}
     dat[ACC].attrs.update(acc_cell)
     dat[ACC].attrs.update(rds.attrs)
