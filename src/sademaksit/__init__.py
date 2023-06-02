@@ -37,7 +37,7 @@ ATTRS = {ACC: {'units': 'mm',
                '_FillValue': UINT16_FILLVAL},
          'time': {'long_name': 'end time of maximum precipitation accumulation period',
                   '_FillValue': UINT16_FILLVAL}}
-CACHE_DIR = os.path.expanduser('~/.cache/sademaksit')
+CACHE_DIR = '/tmp/maksicache'
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 logger = logging.getLogger('maksit')
