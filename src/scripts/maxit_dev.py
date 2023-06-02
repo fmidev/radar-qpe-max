@@ -22,5 +22,5 @@ if __name__ == '__main__':
     resultsdir = os.path.expanduser('~/results/sademaksit')
     #datadir = os.path.expanduser('~/data/alakulma')
     datadir = os.path.expanduser('~/data/polar/fivih')
-    h5paths = ls_low_elev(date, datadir)
+    h5paths = ls_low_elev(date, globfmt=os.path.join(datadir, '{date}*{site}*.h5'))
     maxit(date, h5paths, resultsdir, size=512, resolution=1000)#, ignore_cache=True)
