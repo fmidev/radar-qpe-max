@@ -1,4 +1,4 @@
-# sademaksit
+# maksitiirain
 Statistical indicators of radar QPE over moving temporal windows 
 
 -----
@@ -24,4 +24,4 @@ podman run --rm -v=$HOME/data/polar/fivih/:/data:z -v=$HOME/results/sademaksit/:
 
 ## License
 
-`sademaksit` is distributed under the terms of the [MIT](https://spdx.org/licenses/MIT.html) license.
+`maksitiirain` is distributed under the terms of the [MIT](https://spdx.org/licenses/MIT.html) license.

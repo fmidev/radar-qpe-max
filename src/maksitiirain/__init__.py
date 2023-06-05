@@ -16,7 +16,7 @@ from pyproj import Transformer
 
 from radproc.aliases import lwe
 from radproc.radar import z_r_qpe, source2dict
-from sademaksit._version import __version__
+from maksitiirain._version import __version__
 
 
 ZH = 'DBZH'

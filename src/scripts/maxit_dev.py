@@ -2,7 +2,7 @@ import os
 import logging
 import datetime
 
-from sademaksit import maxit, ls_low_elev
+from maksitiirain import maxit, ls_low_elev
 
 
 logger = logging.getLogger('maksit')

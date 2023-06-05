@@ -3,7 +3,7 @@ import datetime
 
 import click
 
-from sademaksit import DATEFMT, ls_low_elev, maxit, __version__
+from maksitiirain import DATEFMT, ls_low_elev, maxit, __version__
 
 
 @click.command()
