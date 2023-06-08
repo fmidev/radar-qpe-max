@@ -37,15 +37,9 @@ ATTRS = {ACC: {'units': 'mm',
                '_FillValue': UINT16_FILLVAL},
          'time': {'long_name': 'end time of maximum precipitation accumulation period',
                   '_FillValue': UINT16_FILLVAL}}
-CACHE_DIR = '/tmp/maksicache'
-os.makedirs(CACHE_DIR, exist_ok=True)
+DEFAULT_CACHE_DIR = '/tmp/maksicache'
 
 logger = logging.getLogger('maksit')
-
-
-def clear_cache():
-    for path in glob(os.path.join(CACHE_DIR, '*')):
-        os.remove(path)
 
 
 def basic_gatefilter(radar, field=ZH):
@@ -91,7 +85,7 @@ def save_precip_grid(radar, cachefile, tiffile=None, size=2048, resolution=250):
 
 
 def qpe_grids_caching(h5paths, size, resolution, ignore_cache, resultsdir=None,
-                      dbz_field=ZH):
+                      cachedir=DEFAULT_CACHE_DIR, dbz_field=ZH):
     corr = '_c' if 'C' in dbz_field else ''
     if isinstance(resultsdir, str):
         tifdir = os.path.join(resultsdir, 'scan_accums')
@@ -105,7 +99,7 @@ def qpe_grids_caching(h5paths, size, resolution, ignore_cache, resultsdir=None,
         nod = source2dict(radar)['NOD']
         cachefname = QPE_CACHE_FMT.format(ts=ts, nod=nod, size=size,
                                           resolution=resolution, corr=corr)
-        cachefile = os.path.join(CACHE_DIR, cachefname)
+        cachefile = os.path.join(cachedir, cachefname)
         if isinstance(resultsdir, str):
             tifname = QPE_TIF_FMT.format(ts=ts, nod=nod, size=size,
                                          resolution=resolution, corr=corr)
@@ -129,7 +123,7 @@ def ls_low_elev(date, site='', globfmt='{date}*{site}*.h5'):
     return sorted(ls)
 
 
-def maxit(date, h5paths, resultsdir, size=2048, resolution=250, win='1 D',
+def maxit(date, h5paths, resultsdir, cache_dir=DEFAULT_CACHE_DIR, size=2048, resolution=250, win='1 D',
           chunksize=None, ignore_cache=False, dbz_field=ZH):
     # takes forever with small chunksize
     if chunksize is None:
@@ -142,12 +136,13 @@ def maxit(date, h5paths, resultsdir, size=2048, resolution=250, win='1 D',
     chunks = {'x': chunksize, 'y': chunksize}
     spatialchuncks = chunks.copy()
     corr = '_c' if 'C' in dbz_field else ''
+    os.makedirs(cache_dir, exist_ok=True)
     logger.info('Updating precipitation raster cache.')
     nod = qpe_grids_caching(h5paths, size, resolution, ignore_cache,
-                            resultsdir=resultsdir, dbz_field=dbz_field)
+                            resultsdir=resultsdir, cachedir=cache_dir, dbz_field=dbz_field)
     globstr = QPE_CACHE_FMT.format(ts='*', nod=nod, size=size,
                                    resolution=resolution, corr=corr)
-    ncglob = os.path.join(CACHE_DIR, globstr)
+    ncglob = os.path.join(cache_dir, globstr)
     logger.info('Loading cached precipitation rasters.')
     rds = xr.open_mfdataset(ncglob, chunks=chunks, data_vars='minimal',
                             engine='h5netcdf', parallel=True)
