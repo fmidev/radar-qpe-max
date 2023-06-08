@@ -8,4 +8,4 @@ RUN pip install -U pip && pip install --no-cache-dir .
 
 ENV PYART_QUIET=1
 
-ENTRYPOINT ["/usr/local/bin/sademaksit"]
+ENTRYPOINT ["/usr/local/bin/maksitiirain"]
