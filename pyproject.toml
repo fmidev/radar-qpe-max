@@ -4,11 +4,11 @@ build-backend = "hatchling.build"
 
 [project]
 name = "maksitiirain"
-description = ''
+description = 'QPE statistical indicators over moving temporal windows'
 readme = "README.md"
 requires-python = ">=3.7"
 license = "MIT"
-keywords = []
+keywords = ['radar', 'precipitation']
 authors = [
   { name = "Jussi Tiira", email = "jussi.tiira@fmi.fi" },
 ]
@@ -30,9 +30,8 @@ dependencies = [
 dynamic = ["version"]
 
 [project.urls]
-#Documentation = "https://github.com/unknown/sademaksit#readme"
-#Issues = "https://github.com/unknown/sademaksit/issues"
-#Source = "https://github.com/unknown/sademaksit"
+Issues = "https://github.com/fmidev/sademaksit/issues"
+Source = "https://github.com/fmidev/sademaksit"
 
 [project.scripts]
 maksitiirain = "maksitiirain.ui:cli"

@@ -15,7 +15,6 @@ if __name__ == '__main__':
         ch.setLevel(logging.DEBUG)
         logger.addHandler(ch)
     #plt.close('all')
-    #clear_cache()
     #date = datetime.date(2022, 6, 4)
     date = datetime.date(2022, 8, 5)
     #

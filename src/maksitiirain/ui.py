@@ -18,6 +18,7 @@ from maksitiirain import DATEFMT, DEFAULT_CACHE_DIR, ls_low_elev, maxit, __versi
 @click.option('-z', '--dbz-field', metavar='FIELD', help='use FIELD for DBZ', default='DBZH')
 @click.version_option(version=__version__)
 def cli(yyyymmdd, input_glob, output_dir, cache_dir, size, resolution, dbz_field, window):
+    """Max precipitation accumulation over moving window integration period."""
     if resolution is None:
         if size>1999:
             resolution = 250

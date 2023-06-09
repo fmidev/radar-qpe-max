@@ -1,11 +1,14 @@
 # SPDX-FileCopyrightText: 2023-present Jussi Tiira <jussi.tiira@fmi.fi>
 #
 # SPDX-License-Identifier: MIT
+
+# builtin
 import os
 import logging
 import datetime
 from glob import glob
 
+# pypi
 import xarray as xr
 import rioxarray
 import pyart
@@ -14,6 +17,7 @@ import numpy as np
 import pandas as pd
 from pyproj import Transformer
 
+# local
 from radproc.aliases import lwe
 from radproc.radar import z_r_qpe, source2dict
 from maksitiirain._version import __version__
@@ -50,6 +54,7 @@ def basic_gatefilter(radar, field=ZH):
 
 
 def pyart_aeqd(radar):
+    """radar default projection definition as dictionary"""
     lat = radar.latitude['data'][0]
     lon = radar.longitude['data'][0]
     if isinstance(lat, np.ndarray):
@@ -113,6 +118,7 @@ def qpe_grids_caching(h5paths, size, resolution, ignore_cache, resultsdir=None,
 
 
 def ls_low_elev(date, site='', globfmt='{date}*{site}*.h5'):
+    """List radar data files based on formatted glob pattern."""
     def fmtglob(d):
         return globfmt.format(yyyy=d.strftime('%Y'),
                               mm=d.strftime('%m'), dd=d.strftime('%d'),
@@ -123,10 +129,13 @@ def ls_low_elev(date, site='', globfmt='{date}*{site}*.h5'):
     return sorted(ls)
 
 
-def maxit(date, h5paths, resultsdir, cache_dir=DEFAULT_CACHE_DIR, size=2048, resolution=250, win='1 D',
-          chunksize=None, ignore_cache=False, dbz_field=ZH):
-    # takes forever with small chunksize
+def maxit(date, h5paths, resultsdir, cache_dir=DEFAULT_CACHE_DIR, size=2048,
+          resolution=250, win='1 D', chunksize=None, ignore_cache=False,
+          dbz_field=ZH):
+    """main logic"""
+    # very slow with small chunksize
     if chunksize is None:
+        # Use reasonable defaults for chunksize
         if size > 1500:
             chunksize = 128 # to limit memory usage
         elif size > 250:
@@ -135,7 +144,7 @@ def maxit(date, h5paths, resultsdir, cache_dir=DEFAULT_CACHE_DIR, size=2048, res
             chunksize = size
     chunks = {'x': chunksize, 'y': chunksize}
     spatialchuncks = chunks.copy()
-    corr = '_c' if 'C' in dbz_field else ''
+    corr = '_c' if 'C' in dbz_field else '' # mark attenuation correction
     os.makedirs(cache_dir, exist_ok=True)
     logger.info('Updating precipitation raster cache.')
     nod = qpe_grids_caching(h5paths, size, resolution, ignore_cache,
