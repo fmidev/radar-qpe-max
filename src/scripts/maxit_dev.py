@@ -2,7 +2,7 @@ import os
 import logging
 import datetime
 
-from maksitiirain import maxit, ls_low_elev
+from maksitiirain import maxit, two_day_glob
 
 
 logger = logging.getLogger('maksit')
@@ -21,5 +21,5 @@ if __name__ == '__main__':
     resultsdir = os.path.expanduser('~/results/sademaksit')
     #datadir = os.path.expanduser('~/data/alakulma')
     datadir = os.path.expanduser('~/data/polar/fivih')
-    h5paths = ls_low_elev(date, globfmt=os.path.join(datadir, '{date}*{site}*.h5'))
+    h5paths = two_day_glob(date, globfmt=os.path.join(datadir, '{date}*.h5'))
     maxit(date, h5paths, resultsdir, size=512, resolution=1000)#, ignore_cache=True)

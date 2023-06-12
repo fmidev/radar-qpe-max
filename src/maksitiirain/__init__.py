@@ -117,15 +117,21 @@ def qpe_grids_caching(h5paths, size, resolution, ignore_cache, resultsdir=None,
     return nod
 
 
-def ls_low_elev(date, site='', globfmt='{date}*{site}*.h5'):
-    """List radar data files based on formatted glob pattern."""
+def two_day_glob(date, globfmt='{date}*.h5', **kws):
+    """List paths matching a glob pattern for given and previous date.
+
+    The returned list includes paths matching the given date and one day before
+    it. Variables {yyyy}, {mm}, {dd} and {date} are available in the `globfmt`
+    search pattern. The returned list is sorted.
+
+    Additional keyword arguments are passed to `glob.glob`."""
     def fmtglob(d):
         return globfmt.format(yyyy=d.strftime('%Y'),
                               mm=d.strftime('%m'), dd=d.strftime('%d'),
-                              date=d.strftime(DATEFMT), site=site)
+                              date=d.strftime(DATEFMT))
     date0 = date - datetime.timedelta(days=1)
-    ls = glob(fmtglob(date0))
-    ls.extend(glob(fmtglob(date)))
+    ls = glob(fmtglob(date0), **kws)
+    ls.extend(glob(fmtglob(date), **kws))
     return sorted(ls)
 
 

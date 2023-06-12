@@ -3,7 +3,7 @@ import datetime
 
 import click
 
-from maksitiirain import DATEFMT, DEFAULT_CACHE_DIR, ls_low_elev, maxit, __version__
+from maksitiirain import DATEFMT, DEFAULT_CACHE_DIR, two_day_glob, maxit, __version__
 
 
 @click.command()
@@ -29,6 +29,6 @@ def cli(yyyymmdd, input_glob, output_dir, cache_dir, size, resolution, dbz_field
         else:
             resolution = 2000
     date = datetime.datetime.strptime(yyyymmdd, DATEFMT)
-    h5paths = ls_low_elev(date, globfmt=input_glob)
+    h5paths = two_day_glob(date, globfmt=input_glob)
     maxit(date, h5paths, output_dir, cache_dir=cache_dir, size=size, resolution=resolution,
           dbz_field=dbz_field, win=window)
