@@ -47,6 +47,7 @@ logger = logging.getLogger('maksit')
 
 
 def basic_gatefilter(radar, field=ZH):
+    """basic gatefilter based on examples in pyart documentation"""
     gatefilter = pyart.filters.GateFilter(radar)
     gatefilter.exclude_transition()
     gatefilter.exclude_masked(field)
@@ -64,6 +65,10 @@ def pyart_aeqd(radar):
 
 
 def save_precip_grid(radar, cachefile, tiffile=None, size=2048, resolution=250):
+    """Save precipitation products from radar objects to files.
+
+    Precipitation rate is saved to netcdf `cachefile`, and optionally 5-minute
+    accumulation to `tiffile`."""
     gf = basic_gatefilter(radar)
     r_m = size*resolution/2
     grid_shape = (1, size, size)
@@ -91,6 +96,7 @@ def save_precip_grid(radar, cachefile, tiffile=None, size=2048, resolution=250):
 
 def qpe_grids_caching(h5paths, size, resolution, ignore_cache, resultsdir=None,
                       cachedir=DEFAULT_CACHE_DIR, dbz_field=ZH):
+    """batch QPE on ODIM h5 radar data"""
     corr = '_c' if 'C' in dbz_field else ''
     if isinstance(resultsdir, str):
         tifdir = os.path.join(resultsdir, 'scan_accums')
