@@ -141,6 +141,19 @@ def two_day_glob(date, globfmt='{date}*.h5', **kws):
     return sorted(ls)
 
 
+def _write_attrs(data, rdattrs, win):
+    """Write attributes to precipitation maximum data."""
+    dat = data.copy()
+    dat[ACC].attrs.update(ATTRS[ACC])
+    dat[ACC].attrs.update({'long_name': 'maximum precipitation accumulation'})
+    acc_cell = {'cell_methods': f'time: maximum (interval: {win.lower()})'}
+    dat[ACC].attrs.update(acc_cell)
+    dat[ACC].attrs.update(rdattrs)
+    dat['time'].attrs.update(rdattrs)
+    dat['time'].attrs.update(ATTRS['time'])
+    return dat.rio.write_coordinate_system()
+
+
 def maxit(date, h5paths, resultsdir, cache_dir=DEFAULT_CACHE_DIR, size=2048,
           resolution=250, win='1 D', chunksize=None, ignore_cache=False,
           dbz_field=ZH):
@@ -193,14 +206,7 @@ def maxit(date, h5paths, resultsdir, cache_dir=DEFAULT_CACHE_DIR, size=2048,
     logger.debug(dat.chunks)
     dat = dat.compute()
     tstamp = accums.time[-1].dt.strftime(DATEFMT).item()
-    dat[ACC].attrs.update(ATTRS[ACC])
-    dat[ACC].attrs.update({'long_name': 'maximum precipitation accumulation'})
-    acc_cell = {'cell_methods': f'time: maximum (interval: {win.lower()})'}
-    dat[ACC].attrs.update(acc_cell)
-    dat[ACC].attrs.update(rds.attrs)
-    dat['time'].attrs.update(rds.attrs)
-    dat['time'].attrs.update(ATTRS['time'])
-    dat.rio.write_coordinate_system(inplace=True)
+    dat = _write_attrs(dat, rds.attrs, win)
     nod = rds.attrs['NOD']
     tifp = os.path.join(resultsdir, f'{nod}{tstamp}max{win_trim}{size}px{resolution}m{corr}.tif')
     tift = os.path.join(resultsdir, f'{nod}{tstamp}maxtime{win_trim}{size}px{resolution}m{corr}.tif')
