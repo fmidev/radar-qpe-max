@@ -46,6 +46,16 @@ DEFAULT_CACHE_DIR = '/tmp/maksicache'
 logger = logging.getLogger('maksit')
 
 
+def streamlogger_setup(logger, loglevel=logging.INFO):
+    logger.setLevel(loglevel)
+    if not logger.hasHandlers():
+        ch = logging.StreamHandler()
+        formatter = logging.Formatter('%(levelname)s - %(message)s')
+        ch.setFormatter(formatter)
+        ch.setLevel(loglevel)
+        logger.addHandler(ch)
+
+
 def basic_gatefilter(radar, field=ZH):
     """basic gatefilter based on examples in pyart documentation"""
     gatefilter = pyart.filters.GateFilter(radar)
