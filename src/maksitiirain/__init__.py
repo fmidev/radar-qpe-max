@@ -164,19 +164,22 @@ def _write_attrs(data, rdattrs, win):
     return dat.rio.write_coordinate_system()
 
 
+def _autochunk(size):
+    """Set reasonable defaults for chunksize"""
+    if size > 1500:
+        return 128 # to limit memory usage
+    if size > 250:
+        return 256
+    return size
+
+
 def maxit(date, h5paths, resultsdir, cache_dir=DEFAULT_CACHE_DIR, size=2048,
           resolution=250, win='1 D', chunksize=None, ignore_cache=False,
           dbz_field=ZH):
     """main logic"""
     # very slow with small chunksize
     if chunksize is None:
-        # Use reasonable defaults for chunksize
-        if size > 1500:
-            chunksize = 128 # to limit memory usage
-        elif size > 250:
-            chunksize = 256
-        else:
-            chunksize = size
+        chunksize = _autochunk(size)
     chunks = {'x': chunksize, 'y': chunksize}
     spatialchuncks = chunks.copy()
     corr = '_c' if 'C' in dbz_field else '' # mark attenuation correction
