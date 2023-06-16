@@ -48,6 +48,7 @@ logger = logging.getLogger('maksit')
 
 
 def streamlogger_setup(logger, loglevel=logging.INFO):
+    """Setup logger with StreamHandler."""
     logger.setLevel(loglevel)
     if not logger.hasHandlers():
         ch = logging.StreamHandler()
@@ -164,7 +165,7 @@ def _write_attrs(data, rdattrs, win):
 
 
 def _autochunk(size):
-    """Set reasonable defaults for chunksize"""
+    """Set reasonable defaults for chunksize."""
     if size > 1500:
         return 128 # to limit memory usage
     if size > 250:
@@ -173,6 +174,7 @@ def _autochunk(size):
 
 
 def _write_tifs(dat, tifp, tift):
+    """Write main geotiff products to files."""
     tunits = 'minutes since ' + str(dat.time.min().item())
     enc = {'time': {'units': tunits, 'calendar': 'proleptic_gregorian'}}
     dat.rio.update_encoding(enc, inplace=True)
