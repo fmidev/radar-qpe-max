@@ -23,6 +23,7 @@ from radproc.radar import z_r_qpe, source2dict
 from maksitiirain._version import __version__
 
 
+EPSG_TARGET = 3067
 ZH = 'DBZH'
 ACC = 'lwe_accum'
 PYART_AEQD_FMT = '+proj={proj} +lon_0={lon_0} +lat_0={lat_0} +R={R}'
@@ -87,12 +88,12 @@ def save_precip_grid(radar, cachefile, tiffile=None, size=2048, resolution=250):
                                       grid_limits=grid_limits, fields=[lwe],
                                       grid_projection=pyart_aeqd(radar))
     rds = grid.to_xarray().isel(z=0).reset_coords(drop=True)
-    transproj = Transformer.from_crs(pyart_aeqd(radar), 'EPSG:3067')
+    transproj = Transformer.from_crs(pyart_aeqd(radar), f'EPSG:{EPSG_TARGET}')
     x, y = transproj.transform(rds.x, rds.y)
     rds['x'] = x
     rds['y'] = y
     rda = rds[lwe].fillna(0)
-    rda.rio.write_crs(3067, inplace=True)
+    rda.rio.write_crs(EPSG_TARGET, inplace=True)
     rda = rda.to_dataset()
     rda.attrs.update(source2dict(radar))
     rda.to_netcdf(cachefile, encoding=DEFAULT_ENCODING)
@@ -193,7 +194,7 @@ def maxit(date, h5paths, resultsdir, cache_dir=DEFAULT_CACHE_DIR, size=2048,
     logger.info('Loading cached precipitation rasters.')
     rds = xr.open_mfdataset(ncglob, chunks=chunks, data_vars='minimal',
                             engine='h5netcdf', parallel=True)
-    logger.info('Loaded.')
+    logger.info('Rasters loaded.')
     chunks.update({'time': rds.dims['time']})
     rds = rds.chunk(chunks)
     logger.debug(rds.chunks)
@@ -211,7 +212,7 @@ def maxit(date, h5paths, resultsdir, cache_dir=DEFAULT_CACHE_DIR, size=2048,
     # TODO: document why divide by 12
     accums = (rollsel[lwe].rolling({'time': iwin}).sum()/12).to_dataset()
     accums = accums.rename({lwe: ACC})
-    dat = accums.max('time').rio.write_crs(3067)
+    dat = accums.max('time').rio.write_crs(EPSG_TARGET)
     dat['time'] = accums[ACC].idxmax(dim='time', keep_attrs=True).chunk(spatialchuncks)
     dat = dat.compute()
     tstamp = accums.time[-1].dt.strftime(DATEFMT).item()
