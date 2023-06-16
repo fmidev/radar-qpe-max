@@ -51,8 +51,6 @@ def streamlogger_setup(logger, loglevel=logging.INFO):
     logger.setLevel(loglevel)
     if not logger.hasHandlers():
         ch = logging.StreamHandler()
-        formatter = logging.Formatter('%(levelname)s - %(message)s')
-        ch.setFormatter(formatter)
         ch.setLevel(loglevel)
         logger.addHandler(ch)
 
@@ -217,7 +215,6 @@ def maxit(date, h5paths, resultsdir, cache_dir=DEFAULT_CACHE_DIR, size=2048,
     dat = dat.compute()
     tstamp = accums.time[-1].dt.strftime(DATEFMT).item()
     dat = _write_attrs(dat, rds.attrs, win)
-    nod = rds.attrs['NOD']
     tifp = os.path.join(resultsdir, f'{nod}{tstamp}max{win_trim}{size}px{resolution}m{corr}.tif')
     tift = os.path.join(resultsdir, f'{nod}{tstamp}maxtime{win_trim}{size}px{resolution}m{corr}.tif')
     tunits = 'minutes since ' + str(dat.time.min().item())
