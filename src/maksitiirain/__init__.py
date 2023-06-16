@@ -172,6 +172,16 @@ def _autochunk(size):
     return size
 
 
+def _write_tifs(dat, tifp, tift):
+    tunits = 'minutes since ' + str(dat.time.min().item())
+    enc = {'time': {'units': tunits, 'calendar': 'proleptic_gregorian'}}
+    dat.rio.update_encoding(enc, inplace=True)
+    dat[ACC].rio.to_raster(tifp, dtype='uint16', compress='deflate')
+    dat['time'].rio.to_raster(tift, dtype='uint16', compress='deflate')
+    unidat = rioxarray.open_rasterio(tift).rio.update_attrs({'units': tunits})
+    unidat.rio.to_raster(tift, compress='deflate')
+
+
 def maxit(date, h5paths, resultsdir, cache_dir=DEFAULT_CACHE_DIR, size=2048,
           resolution=250, win='1 D', chunksize=None, ignore_cache=False,
           dbz_field=ZH):
@@ -217,10 +227,4 @@ def maxit(date, h5paths, resultsdir, cache_dir=DEFAULT_CACHE_DIR, size=2048,
     dat = _write_attrs(dat, rds.attrs, win)
     tifp = os.path.join(resultsdir, f'{nod}{tstamp}max{win_trim}{size}px{resolution}m{corr}.tif')
     tift = os.path.join(resultsdir, f'{nod}{tstamp}maxtime{win_trim}{size}px{resolution}m{corr}.tif')
-    tunits = 'minutes since ' + str(dat.time.min().item())
-    enc = {'time': {'units': tunits, 'calendar': 'proleptic_gregorian'}}
-    dat.rio.update_encoding(enc, inplace=True)
-    dat[ACC].rio.to_raster(tifp, dtype='uint16', compress='deflate')
-    dat['time'].rio.to_raster(tift, dtype='uint16', compress='deflate')
-    unidat = rioxarray.open_rasterio(tift).rio.update_attrs({'units': tunits})
-    unidat.rio.to_raster(tift, compress='deflate')
+    _write_tifs(dat, tifp, tift)
