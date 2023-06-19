@@ -184,6 +184,15 @@ def _write_tifs(dat, tifp, tift):
     unidat.rio.to_raster(tift, compress='deflate')
 
 
+def _prep_rds(ncglob, chunks):
+    logger.info('Loading cached precipitation rasters.')
+    rds = xr.open_mfdataset(ncglob, chunks=chunks, data_vars='minimal',
+                            engine='h5netcdf', parallel=True)
+    logger.info('Rasters loaded.')
+    chunks.update({'time': rds.dims['time']})
+    return rds.chunk(chunks)
+
+
 def maxit(date, h5paths, resultsdir, cache_dir=DEFAULT_CACHE_DIR, size=2048,
           resolution=250, win='1 D', chunksize=None, ignore_cache=False,
           dbz_field=ZH):
@@ -197,22 +206,16 @@ def maxit(date, h5paths, resultsdir, cache_dir=DEFAULT_CACHE_DIR, size=2048,
     os.makedirs(cache_dir, exist_ok=True)
     logger.info('Updating precipitation raster cache.')
     nod = qpe_grids_caching(h5paths, size, resolution, ignore_cache,
-                            resultsdir=resultsdir, cachedir=cache_dir, dbz_field=dbz_field)
+                            resultsdir=resultsdir, cachedir=cache_dir,
+                            dbz_field=dbz_field)
     globstr = QPE_CACHE_FMT.format(ts='*', nod=nod, size=size,
                                    resolution=resolution, corr=corr)
     ncglob = os.path.join(cache_dir, globstr)
-    logger.info('Loading cached precipitation rasters.')
-    rds = xr.open_mfdataset(ncglob, chunks=chunks, data_vars='minimal',
-                            engine='h5netcdf', parallel=True)
-    logger.info('Rasters loaded.')
-    chunks.update({'time': rds.dims['time']})
-    rds = rds.chunk(chunks)
-    logger.debug(rds.chunks)
+    rds = _prep_rds(ncglob, chunks)
     iwin = rds.time.groupby(rds.time.dt.floor(win)).sizes['time']
     dwin = pd.to_timedelta(win)
     win_trim = win.replace(' ', '').lower()
-    t_round = rds.indexes['time'].round('min')
-    rds['time'] = t_round
+    rds['time'] = rds.indexes['time'].round('min')
     rds = rds.convert_calendar(calendar='standard', use_cftime=True)
     tind = rds.indexes['time']
     tdelta = pd.to_timedelta(tind.freq) or pd.Series(tind).diff().median()
