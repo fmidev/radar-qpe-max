@@ -185,12 +185,15 @@ def _write_tifs(dat, tifp, tift):
 
 
 def _prep_rds(ncglob, chunks):
+    """Prepare precip rate dataset."""
     logger.info('Loading cached precipitation rasters.')
     rds = xr.open_mfdataset(ncglob, chunks=chunks, data_vars='minimal',
                             engine='h5netcdf', parallel=True)
     logger.info('Rasters loaded.')
     chunks.update({'time': rds.dims['time']})
-    return rds.chunk(chunks)
+    rds = rds.chunk(chunks)
+    rds['time'] = rds.indexes['time'].round('min')
+    return rds.convert_calendar(calendar='standard', use_cftime=True)
 
 
 def maxit(date, h5paths, resultsdir, cache_dir=DEFAULT_CACHE_DIR, size=2048,
@@ -212,11 +215,11 @@ def maxit(date, h5paths, resultsdir, cache_dir=DEFAULT_CACHE_DIR, size=2048,
                                    resolution=resolution, corr=corr)
     ncglob = os.path.join(cache_dir, globstr)
     rds = _prep_rds(ncglob, chunks)
-    iwin = rds.time.groupby(rds.time.dt.floor(win)).sizes['time']
+    win_trim = win.replace(' ', '')
+    winlow = win_trim.lower()
+    # number of timesteps in window
+    iwin = rds.time.groupby(rds.time.dt.floor(win_trim)).sizes['time']
     dwin = pd.to_timedelta(win)
-    win_trim = win.replace(' ', '').lower()
-    rds['time'] = rds.indexes['time'].round('min')
-    rds = rds.convert_calendar(calendar='standard', use_cftime=True)
     tind = rds.indexes['time']
     tdelta = pd.to_timedelta(tind.freq) or pd.Series(tind).diff().median()
     tstep_last = pd.to_datetime(date+datetime.timedelta(days=1))-tdelta
@@ -230,6 +233,6 @@ def maxit(date, h5paths, resultsdir, cache_dir=DEFAULT_CACHE_DIR, size=2048,
     dat = dat.compute()
     tstamp = accums.time[-1].dt.strftime(DATEFMT).item()
     dat = _write_attrs(dat, rds.attrs, win)
-    tifp = os.path.join(resultsdir, f'{nod}{tstamp}max{win_trim}{size}px{resolution}m{corr}.tif')
-    tift = os.path.join(resultsdir, f'{nod}{tstamp}maxtime{win_trim}{size}px{resolution}m{corr}.tif')
+    tifp = os.path.join(resultsdir, f'{nod}{tstamp}max{winlow}{size}px{resolution}m{corr}.tif')
+    tift = os.path.join(resultsdir, f'{nod}{tstamp}maxtime{winlow}{size}px{resolution}m{corr}.tif')
     _write_tifs(dat, tifp, tift)
