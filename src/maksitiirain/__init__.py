@@ -19,7 +19,8 @@ from pyproj import Transformer
 
 # local
 from radproc.aliases import lwe
-from radproc.radar import z_r_qpe, source2dict
+from radproc.radar import z_r_qpe
+from radproc.tools import source2dict
 from maksitiirain._version import __version__
 
 
@@ -94,7 +95,7 @@ def save_precip_grid(radar, cachefile, tiffile=None, size=2048, resolution=250):
     rda = rds[lwe].fillna(0)
     rda.rio.write_crs(EPSG_TARGET, inplace=True)
     rda = rda.to_dataset()
-    rda.attrs.update(source2dict(radar))
+    rda.attrs.update(source2dict(radar.metadata['source']))
     rda.to_netcdf(cachefile, encoding=DEFAULT_ENCODING)
     if isinstance(tiffile, str):
         # TODO: hardcoded scan frequency assumption
@@ -117,16 +118,16 @@ def qpe_grids_caching(h5paths, size, resolution, ignore_cache, resultsdir=None,
                                           file_field_names=True)
         t = generate_radar_time_begin(radar)
         ts = t.strftime('%Y%m%d%H%M')
-        nod = source2dict(radar)['NOD']
+        nod = source2dict(radar.metadata['source'])['NOD']
         cachefname = QPE_CACHE_FMT.format(ts=ts, nod=nod, size=size,
                                           resolution=resolution, corr=corr)
         cachefile = os.path.join(cachedir, cachefname)
+        if os.path.isfile(cachefile) and not ignore_cache:
+            continue
         if isinstance(resultsdir, str):
             tifname = QPE_TIF_FMT.format(ts=ts, nod=nod, size=size,
                                          resolution=resolution, corr=corr)
             tiffile = os.path.join(tifdir, tifname)
-        if os.path.isfile(cachefile) and not ignore_cache:
-            continue
         z_r_qpe(radar, dbz_field=dbz_field)
         save_precip_grid(radar, cachefile, tiffile=tiffile, size=size,
                          resolution=resolution)
