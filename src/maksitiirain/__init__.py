@@ -19,7 +19,7 @@ from pyproj import Transformer
 
 # local
 from radproc.aliases import lwe
-from radproc.radar import z_r_qpe
+from radproc.radar import z_r_qpe, pyart_aeqd
 from radproc.tools import source2dict
 from maksitiirain._version import __version__
 
@@ -27,7 +27,6 @@ from maksitiirain._version import __version__
 EPSG_TARGET = 3067
 ZH = 'DBZH'
 ACC = 'lwe_accum'
-PYART_AEQD_FMT = '+proj={proj} +lon_0={lon_0} +lat_0={lat_0} +R={R}'
 qpefmt = '{ts}{nod}{size}px{resolution}m{corr}'
 QPE_CACHE_FMT = qpefmt + '.nc'
 QPE_TIF_FMT = qpefmt + '.tif'
@@ -63,16 +62,6 @@ def basic_gatefilter(radar, field=ZH):
     gatefilter.exclude_transition()
     gatefilter.exclude_masked(field)
     return gatefilter
-
-
-def pyart_aeqd(radar):
-    """radar default projection definition as dictionary"""
-    lat = radar.latitude['data'][0]
-    lon = radar.longitude['data'][0]
-    if isinstance(lat, np.ndarray):
-        lat = lat[0]
-        lon = lon[0]
-    return dict(proj='aeqd', lat_0=lat, lon_0=lon, R=6370997)
 
 
 def save_precip_grid(radar, cachefile, tiffile=None, size=2048, resolution=250):
