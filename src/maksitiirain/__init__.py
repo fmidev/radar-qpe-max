@@ -18,7 +18,7 @@ import pandas as pd
 from pyproj import Transformer
 
 # local
-from radproc.aliases import lwe
+from radproc.aliases.fmi import LWE
 from radproc.radar import z_r_qpe, pyart_aeqd
 from radproc.tools import source2dict
 from maksitiirain._version import __version__
@@ -33,7 +33,7 @@ QPE_TIF_FMT = qpefmt + '.tif'
 LWE_SCALE_FACTOR = 0.01
 DATEFMT = '%Y%m%d'
 UINT16_FILLVAL = np.iinfo(np.uint16).max
-DEFAULT_ENCODING = {lwe: {'zlib': True,
+DEFAULT_ENCODING = {LWE: {'zlib': True,
                           '_FillValue': UINT16_FILLVAL,
                           'dtype': 'u2',
                           'scale_factor': LWE_SCALE_FACTOR}}
@@ -74,21 +74,21 @@ def save_precip_grid(radar, cachefile, tiffile=None, size=2048, resolution=250):
     grid_shape = (1, size, size)
     grid_limits = ((0, 5000), (-r_m, r_m), (-r_m, r_m))
     grid = pyart.map.grid_from_radars(radar, gatefilters=gf, grid_shape=grid_shape,
-                                      grid_limits=grid_limits, fields=[lwe],
+                                      grid_limits=grid_limits, fields=[LWE],
                                       grid_projection=pyart_aeqd(radar))
     rds = grid.to_xarray().isel(z=0).reset_coords(drop=True)
     transproj = Transformer.from_crs(pyart_aeqd(radar), f'EPSG:{EPSG_TARGET}')
     x, y = transproj.transform(rds.x, rds.y)
     rds['x'] = x
     rds['y'] = y
-    rda = rds[lwe].fillna(0)
+    rda = rds[LWE].fillna(0)
     rda.rio.write_crs(EPSG_TARGET, inplace=True)
     rda = rda.to_dataset()
     rda.attrs.update(source2dict(radar.metadata['source']))
     rda.to_netcdf(cachefile, encoding=DEFAULT_ENCODING)
     if isinstance(tiffile, str):
         # TODO: hardcoded scan frequency assumption
-        acc = (rda.isel(time=0)[lwe]/12).rename(ACC)
+        acc = (rda.isel(time=0)[LWE]/12).rename(ACC)
         acc.attrs.update(ATTRS[ACC])
         acc.rio.update_encoding({'scale_factor': LWE_SCALE_FACTOR}, inplace=True)
         acc.rio.to_raster(tiffile, dtype='uint16', compress='deflate')
@@ -216,8 +216,8 @@ def maxit(date, h5paths, resultsdir, cache_dir=DEFAULT_CACHE_DIR, size=2048,
     tstep_pre = pd.to_datetime(date)-dwin+tdelta
     rollsel = rds.sel(time=slice(tstep_pre, tstep_last))
     # TODO: document why divide by 12
-    accums = (rollsel[lwe].rolling({'time': iwin}).sum()/12).to_dataset()
-    accums = accums.rename({lwe: ACC})
+    accums = (rollsel[LWE].rolling({'time': iwin}).sum()/12).to_dataset()
+    accums = accums.rename({LWE: ACC})
     dat = accums.max('time').rio.write_crs(EPSG_TARGET)
     dat['time'] = accums[ACC].idxmax(dim='time', keep_attrs=True).chunk(spatialchuncks)
     dat = dat.compute()

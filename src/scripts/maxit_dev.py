@@ -18,4 +18,5 @@ if __name__ == '__main__':
     #datadir = os.path.expanduser('~/data/alakulma')
     datadir = os.path.expanduser('~/data/polar/fivih')
     h5paths = two_day_glob(date, globfmt=os.path.join(datadir, '{date}*.h5'))
-    maxit(date, h5paths, resultsdir, size=512, resolution=1000)#, ignore_cache=True)
+    # size 128 can still be run on a laptop
+    maxit(date, h5paths, resultsdir, size=128, resolution=4000)#, ignore_cache=True)
