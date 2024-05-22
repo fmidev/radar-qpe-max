@@ -180,7 +180,7 @@ def _prep_rds(ncglob, chunks):
     rds = xr.open_mfdataset(ncglob, chunks=chunks, data_vars='minimal',
                             engine='h5netcdf', parallel=True)
     logger.info('Rasters loaded.')
-    chunks.update({'time': rds.dims['time']})
+    chunks.update({'time': rds.sizes['time']})
     rds = rds.chunk(chunks)
     rds['time'] = rds.indexes['time'].round('min')
     return rds.convert_calendar(calendar='standard', use_cftime=True)
