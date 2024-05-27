@@ -15,7 +15,7 @@ import pyart
 from pyart.graph.common import generate_radar_time_begin
 import numpy as np
 import pandas as pd
-from pyproj import Transformer
+from pyproj import Transformer, CRS
 
 # local
 from radproc.aliases.fmi import LWE
@@ -77,7 +77,8 @@ def save_precip_grid(radar, cachefile, tiffile=None, size=2048, resolution=250):
                                       grid_limits=grid_limits, fields=[LWE],
                                       grid_projection=pyart_aeqd(radar))
     rds = grid.to_xarray().isel(z=0).reset_coords(drop=True)
-    transproj = Transformer.from_crs(pyart_aeqd(radar), f'EPSG:{EPSG_TARGET}')
+    crs_target = CRS.from_epsg(EPSG_TARGET)
+    transproj = Transformer.from_crs(grid.projection_proj.crs, crs_target)
     x, y = transproj.transform(rds.x, rds.y)
     rds['x'] = x
     rds['y'] = y
@@ -85,6 +86,8 @@ def save_precip_grid(radar, cachefile, tiffile=None, size=2048, resolution=250):
     rda.rio.write_crs(EPSG_TARGET, inplace=True)
     rda = rda.to_dataset()
     rda.attrs.update(source2dict(radar.metadata['source']))
+    # TODO: retain existing history if any
+    rda.attrs.update({'history': __version__})
     rda.to_netcdf(cachefile, encoding=DEFAULT_ENCODING)
     if isinstance(tiffile, str):
         # TODO: hardcoded scan frequency assumption
