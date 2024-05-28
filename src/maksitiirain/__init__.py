@@ -15,7 +15,7 @@ import pyart
 from pyart.graph.common import generate_radar_time_begin
 import numpy as np
 import pandas as pd
-from pyproj import Transformer
+from pyproj import Transformer, CRS
 
 # local
 from radproc.aliases.fmi import LWE
@@ -25,15 +25,6 @@ from maksitiirain._version import __version__
 
 
 EPSG_TARGET = 3067
-PROJ_TARGET = {
-    "proj": "utm",
-    "zone": 35,
-    "ellps": "GRS80",
-    "towgs84": [0, 0, 0, 0, 0, 0, 0],
-    "units": "m",
-    "no_defs": True,
-    "type": "crs"
-}
 ZH = 'DBZH'
 ACC = 'lwe_accum'
 qpefmt = '{ts}{nod}{size}px{resolution}m{corr}'
@@ -79,7 +70,8 @@ def save_precip_grid(radar, cachefile, tiffile=None, size=2048, resolution=250):
     Precipitation rate is saved to netcdf `cachefile`, and optionally 5-minute
     accumulation to `tiffile`."""
     gf = basic_gatefilter(radar)
-    transp = Transformer.from_crs('WGS84', f'EPSG: {EPSG_TARGET}')
+    crs_target = CRS(EPSG_TARGET)
+    transp = Transformer.from_crs('WGS84', crs_target)
     radar_y, radar_x = transp.transform(radar.latitude['data'][0],
                                         radar.longitude['data'][0])
     r_m = size*resolution/2
@@ -87,9 +79,11 @@ def save_precip_grid(radar, cachefile, tiffile=None, size=2048, resolution=250):
     grid_limits = ((0, 5000),
                    (radar_x-r_m, radar_x+r_m),
                    (radar_y-r_m, radar_y+r_m))
-    grid = pyart.map.grid_from_radars(radar, gatefilters=gf, grid_shape=grid_shape,
+    grid = pyart.map.grid_from_radars(radar, gatefilters=gf,
+                                      grid_shape=grid_shape,
                                       grid_limits=grid_limits, fields=[LWE],
-                                      grid_projection=PROJ_TARGET, grid_origin=(0, 0),
+                                      grid_projection=crs_target.to_dict(),
+                                      grid_origin=(0, 0),
                                       grid_origin_alt=0)
     rds = grid.to_xarray().isel(z=0).reset_coords(drop=True)
     rds['x'] = rds.x
