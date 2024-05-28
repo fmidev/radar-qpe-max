@@ -70,18 +70,29 @@ def save_precip_grid(radar, cachefile, tiffile=None, size=2048, resolution=250):
     Precipitation rate is saved to netcdf `cachefile`, and optionally 5-minute
     accumulation to `tiffile`."""
     gf = basic_gatefilter(radar)
+    t = Transformer.from_crs('WGS84', f'EPSG: {EPSG_TARGET}')
+    radar_y, radar_x = t.transform(radar.latitude['data'][0], radar.longitude['data'][0])
     r_m = size*resolution/2
     grid_shape = (1, size, size)
-    grid_limits = ((0, 5000), (-r_m, r_m), (-r_m, r_m))
+    grid_limits = ((0, 5000),
+                   (radar_x-r_m, radar_x+r_m),
+                   (radar_y-r_m, radar_y+r_m))
+    target_proj = {
+        "proj": "utm",
+        "zone": 35,
+        "ellps": "GRS80",
+        "towgs84": [0, 0, 0, 0, 0, 0, 0],
+        "units": "m",
+        "no_defs": True,
+        "type": "crs"
+    }
     grid = pyart.map.grid_from_radars(radar, gatefilters=gf, grid_shape=grid_shape,
                                       grid_limits=grid_limits, fields=[LWE],
-                                      grid_projection=pyart_aeqd(radar))
+                                      grid_projection=target_proj, grid_origin=(0, 0),
+                                      grid_origin_alt=0)
     rds = grid.to_xarray().isel(z=0).reset_coords(drop=True)
-    crs_target = CRS.from_epsg(EPSG_TARGET)
-    transproj = Transformer.from_crs(grid.projection_proj.crs, crs_target)
-    x, y = transproj.transform(rds.x, rds.y)
-    rds['x'] = x
-    rds['y'] = y
+    rds['x'] = rds.x
+    rds['y'] = rds.y
     rda = rds[LWE].fillna(0)
     rda.rio.write_crs(EPSG_TARGET, inplace=True)
     rda = rda.to_dataset()
