@@ -90,6 +90,8 @@ def save_precip_grid(radar, cachefile, tiffile=None, size=2048, resolution=250):
                                       grid_projection=projd_target,
                                       grid_origin=(0, 0),
                                       grid_origin_alt=0)
+    grid.x['data'] = grid.x['data'].flatten()
+    grid.y['data'] = grid.y['data'].flatten()
     rds = grid.to_xarray().isel(z=0).reset_coords(drop=True)
     rds['x'] = rds.x
     rds['y'] = rds.y
