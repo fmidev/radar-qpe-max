@@ -6,6 +6,7 @@
 import os
 import logging
 import datetime
+import warnings
 from glob import glob
 
 # pypi
@@ -71,6 +72,10 @@ def save_precip_grid(radar, cachefile, tiffile=None, size=2048, resolution=250):
     accumulation to `tiffile`."""
     gf = basic_gatefilter(radar)
     crs_target = CRS(EPSG_TARGET)
+    with warnings.catch_warnings():
+        # "you might lose some information blah blah"
+        warnings.filterwarnings("ignore", category=UserWarning)
+        projd_target = crs_target.to_dict()
     transp = Transformer.from_crs('WGS84', crs_target)
     radar_y, radar_x = transp.transform(radar.latitude['data'][0],
                                         radar.longitude['data'][0])
@@ -82,7 +87,7 @@ def save_precip_grid(radar, cachefile, tiffile=None, size=2048, resolution=250):
     grid = pyart.map.grid_from_radars(radar, gatefilters=gf,
                                       grid_shape=grid_shape,
                                       grid_limits=grid_limits, fields=[LWE],
-                                      grid_projection=crs_target.to_dict(),
+                                      grid_projection=projd_target,
                                       grid_origin=(0, 0),
                                       grid_origin_alt=0)
     rds = grid.to_xarray().isel(z=0).reset_coords(drop=True)
