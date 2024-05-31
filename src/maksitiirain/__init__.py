@@ -8,6 +8,7 @@ import logging
 import datetime
 import warnings
 from glob import glob
+from typing import Optional, List
 
 # pypi
 import xarray as xr
@@ -48,7 +49,7 @@ DEFAULT_CACHE_DIR = '/tmp/maksicache'
 logger = logging.getLogger('maksit')
 
 
-def streamlogger_setup(logger, loglevel=logging.INFO):
+def streamlogger_setup(logger: logging.Logger, loglevel: int = logging.INFO) -> None:
     """Setup logger with StreamHandler."""
     logger.setLevel(loglevel)
     if not logger.hasHandlers():
@@ -57,7 +58,7 @@ def streamlogger_setup(logger, loglevel=logging.INFO):
         logger.addHandler(ch)
 
 
-def basic_gatefilter(radar, field=ZH):
+def basic_gatefilter(radar: pyart.core.Radar, field: str = ZH) -> pyart.filters.GateFilter:
     """basic gatefilter based on examples in pyart documentation"""
     gatefilter = pyart.filters.GateFilter(radar)
     gatefilter.exclude_transition()
@@ -65,7 +66,19 @@ def basic_gatefilter(radar, field=ZH):
     return gatefilter
 
 
-def create_grid(radar, size=2048, resolution=250):
+def create_grid(radar: pyart.core.Radar, size: int = 2048, 
+                resolution: int = 250) -> pyart.core.Grid:
+    """
+    Create a grid from radar data.
+
+    Args:
+        radar (pyart.core.Radar): The radar object containing the data.
+        size (int, optional): The size of the grid. Defaults to 2048.
+        resolution (int, optional): The resolution of the grid. Defaults to 250.
+
+    Returns:
+        pyart.core.Grid: The grid object containing the gridded data.
+    """
     gf = basic_gatefilter(radar)
     crs_target = CRS(EPSG_TARGET)
     with warnings.catch_warnings():
@@ -91,7 +104,9 @@ def create_grid(radar, size=2048, resolution=250):
     return grid
 
 
-def save_precip_grid(radar, cachefile, tiffile=None, size=2048, resolution=250):
+def save_precip_grid(radar: pyart.core.Radar, cachefile: str, 
+                     tiffile: Optional[str] = None, size: int = 2048, 
+                     resolution: int = 250) -> None:
     """Save precipitation products from Radar objects to files.
 
     Precipitation rate is saved to netcdf `cachefile`, and optionally 5-minute
@@ -115,8 +130,9 @@ def save_precip_grid(radar, cachefile, tiffile=None, size=2048, resolution=250):
         acc.rio.to_raster(tiffile, dtype='uint16', compress='deflate')
 
 
-def qpe_grids_caching(h5paths, size, resolution, ignore_cache, resultsdir=None,
-                      cachedir=DEFAULT_CACHE_DIR, dbz_field=ZH):
+def qpe_grids_caching(h5paths: List[str], size: int, resolution: int, 
+                      ignore_cache: bool, resultsdir: Optional[str] = None,
+                      cachedir: str = DEFAULT_CACHE_DIR, dbz_field: str = ZH) -> str:
     """batch QPE on ODIM h5 radar data"""
     corr = '_c' if 'C' in dbz_field else ''
     if isinstance(resultsdir, str):
@@ -144,7 +160,7 @@ def qpe_grids_caching(h5paths, size, resolution, ignore_cache, resultsdir=None,
     return nod
 
 
-def two_day_glob(date, globfmt='{date}*.h5', **kws):
+def two_day_glob(date: datetime.date, globfmt: str = '{date}*.h5', **kws) -> List[str]:
     """List paths matching a glob pattern for given and previous date.
 
     The returned list includes paths matching the given date and one day before
@@ -152,7 +168,7 @@ def two_day_glob(date, globfmt='{date}*.h5', **kws):
     search pattern. The returned list is sorted.
 
     Additional keyword arguments are passed to `glob.glob`."""
-    def fmtglob(d):
+    def fmtglob(d: datetime.date) -> str:
         return globfmt.format(yyyy=d.strftime('%Y'),
                               mm=d.strftime('%m'), dd=d.strftime('%d'),
                               date=d.strftime(DATEFMT))
@@ -162,7 +178,7 @@ def two_day_glob(date, globfmt='{date}*.h5', **kws):
     return sorted(ls)
 
 
-def _write_attrs(data, rdattrs, win):
+def _write_attrs(data: xr.Dataset, rdattrs: dict, win: str) -> xr.Dataset:
     """Write attributes to precipitation maximum data."""
     dat = data.copy()
     dat[ACC].attrs.update(ATTRS[ACC])
@@ -175,7 +191,7 @@ def _write_attrs(data, rdattrs, win):
     return dat.rio.write_coordinate_system()
 
 
-def _autochunk(size):
+def _autochunk(size: int) -> int:
     """Set reasonable defaults for chunksize."""
     if size > 1500:
         return 128 # to limit memory usage
@@ -184,7 +200,7 @@ def _autochunk(size):
     return size
 
 
-def _write_tifs(dat, tifp, tift):
+def _write_tifs(dat: xr.Dataset, tifp: str, tift: str) -> None:
     """Write main geotiff products to files."""
     tunits = 'minutes since ' + str(dat.time.min().item())
     enc = {'time': {'units': tunits, 'calendar': 'proleptic_gregorian'}}
@@ -195,7 +211,7 @@ def _write_tifs(dat, tifp, tift):
     unidat.rio.to_raster(tift, compress='deflate')
 
 
-def _prep_rds(ncglob, chunks):
+def _prep_rds(ncglob: str, chunks: dict) -> xr.Dataset:
     """Prepare precip rate dataset."""
     logger.info('Loading cached precipitation rasters.')
     rds = xr.open_mfdataset(ncglob, chunks=chunks, data_vars='minimal',
@@ -207,9 +223,11 @@ def _prep_rds(ncglob, chunks):
     return rds.convert_calendar(calendar='standard', use_cftime=True)
 
 
-def maxit(date, h5paths, resultsdir, cache_dir=DEFAULT_CACHE_DIR, size=2048,
-          resolution=250, win='1 D', chunksize=None, ignore_cache=False,
-          dbz_field=ZH):
+def maxit(date: datetime.date, h5paths: List[str], resultsdir: str, 
+          cache_dir: str = DEFAULT_CACHE_DIR, size: int = 2048,
+          resolution: int = 250, win: str = '1 D', 
+          chunksize: Optional[int] = None, ignore_cache: bool = False,
+          dbz_field: str = ZH) -> None:
     """main logic"""
     # very slow with small chunksize
     if chunksize is None:
