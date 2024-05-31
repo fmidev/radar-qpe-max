@@ -98,7 +98,8 @@ def create_grid(radar: pyart.core.Radar, size: int = 2048,
                                       grid_limits=grid_limits, fields=[LWE],
                                       grid_projection=projd_target,
                                       grid_origin=(0, 0),
-                                      grid_origin_alt=0)
+                                      grid_origin_alt=0,
+                                      roi_func='dist', weighting_function='Barnes2')
     grid.x['data'] = grid.x['data'].flatten()
     grid.y['data'] = grid.y['data'].flatten()
     return grid
