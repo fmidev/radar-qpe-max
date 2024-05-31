@@ -65,11 +65,7 @@ def basic_gatefilter(radar, field=ZH):
     return gatefilter
 
 
-def save_precip_grid(radar, cachefile, tiffile=None, size=2048, resolution=250):
-    """Save precipitation products from radar objects to files.
-
-    Precipitation rate is saved to netcdf `cachefile`, and optionally 5-minute
-    accumulation to `tiffile`."""
+def create_grid(radar, size=2048, resolution=250):
     gf = basic_gatefilter(radar)
     crs_target = CRS(EPSG_TARGET)
     with warnings.catch_warnings():
@@ -92,6 +88,15 @@ def save_precip_grid(radar, cachefile, tiffile=None, size=2048, resolution=250):
                                       grid_origin_alt=0)
     grid.x['data'] = grid.x['data'].flatten()
     grid.y['data'] = grid.y['data'].flatten()
+    return grid
+
+
+def save_precip_grid(radar, cachefile, tiffile=None, size=2048, resolution=250):
+    """Save precipitation products from Radar objects to files.
+
+    Precipitation rate is saved to netcdf `cachefile`, and optionally 5-minute
+    accumulation to `tiffile`."""
+    grid = create_grid(radar, size=size, resolution=resolution)
     rds = grid.to_xarray().isel(z=0).reset_coords(drop=True)
     rds['x'] = rds.x
     rds['y'] = rds.y
