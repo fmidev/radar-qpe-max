@@ -46,16 +46,7 @@ ATTRS = {ACC: {'units': 'mm',
                   '_FillValue': UINT16_FILLVAL}}
 DEFAULT_CACHE_DIR = '/tmp/maksicache'
 
-logger = logging.getLogger('maksit')
-
-
-def streamlogger_setup(logger: logging.Logger, loglevel: int = logging.INFO) -> None:
-    """Setup logger with StreamHandler."""
-    logger.setLevel(loglevel)
-    if not logger.hasHandlers():
-        ch = logging.StreamHandler()
-        ch.setLevel(loglevel)
-        logger.addHandler(ch)
+logger = logging.getLogger(__name__)
 
 
 def basic_gatefilter(radar: pyart.core.Radar, field: str = ZH) -> pyart.filters.GateFilter:
@@ -66,7 +57,7 @@ def basic_gatefilter(radar: pyart.core.Radar, field: str = ZH) -> pyart.filters.
     return gatefilter
 
 
-def create_grid(radar: pyart.core.Radar, size: int = 2048, 
+def create_grid(radar: pyart.core.Radar, size: int = 2048,
                 resolution: int = 250) -> pyart.core.Grid:
     """
     Create a grid from radar data.
@@ -99,14 +90,15 @@ def create_grid(radar: pyart.core.Radar, size: int = 2048,
                                       grid_projection=projd_target,
                                       grid_origin=(0, 0),
                                       grid_origin_alt=0,
-                                      roi_func='dist', weighting_function='Barnes2')
+                                      map_roi=True,
+                                      roi_func='dist_beam')
     grid.x['data'] = grid.x['data'].flatten()
     grid.y['data'] = grid.y['data'].flatten()
     return grid
 
 
-def save_precip_grid(radar: pyart.core.Radar, cachefile: str, 
-                     tiffile: Optional[str] = None, size: int = 2048, 
+def save_precip_grid(radar: pyart.core.Radar, cachefile: str,
+                     tiffile: Optional[str] = None, size: int = 2048,
                      resolution: int = 250) -> None:
     """Save precipitation products from Radar objects to files.
 
@@ -131,7 +123,7 @@ def save_precip_grid(radar: pyart.core.Radar, cachefile: str,
         acc.rio.to_raster(tiffile, dtype='uint16', compress='deflate')
 
 
-def qpe_grids_caching(h5paths: List[str], size: int, resolution: int, 
+def qpe_grids_caching(h5paths: List[str], size: int, resolution: int,
                       ignore_cache: bool, resultsdir: Optional[str] = None,
                       cachedir: str = DEFAULT_CACHE_DIR, dbz_field: str = ZH) -> str:
     """batch QPE on ODIM h5 radar data"""
@@ -224,9 +216,9 @@ def _prep_rds(ncglob: str, chunks: dict) -> xr.Dataset:
     return rds.convert_calendar(calendar='standard', use_cftime=True)
 
 
-def maxit(date: datetime.date, h5paths: List[str], resultsdir: str, 
+def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
           cache_dir: str = DEFAULT_CACHE_DIR, size: int = 2048,
-          resolution: int = 250, win: str = '1 D', 
+          resolution: int = 250, win: str = '1 D',
           chunksize: Optional[int] = None, ignore_cache: bool = False,
           dbz_field: str = ZH) -> None:
     """main logic"""

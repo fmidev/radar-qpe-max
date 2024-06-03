@@ -4,11 +4,11 @@ import logging
 
 import click
 
-from maksitiirain import DATEFMT, DEFAULT_CACHE_DIR, two_day_glob, maxit
-from maksitiirain import streamlogger_setup, __version__
+from maksitiirain import DATEFMT, DEFAULT_CACHE_DIR, two_day_glob, maxit, __version__
+from maksitiirain.logging import streamlogger_setup
 
 
-logger = logging.getLogger('maksit')
+logger = logging.getLogger(__name__)
 
 
 @click.command()
@@ -21,10 +21,12 @@ logger = logging.getLogger('maksit')
 @click.option('-r', '--resolution', metavar='METRE', help='spatial resolution in meters')
 @click.option('-w', '--window', metavar='WIN', help='length of the time window, e.g. 1D for 1 day', default='1 D')
 @click.option('-z', '--dbz-field', metavar='FIELD', help='use FIELD for DBZ', default='DBZH')
-@click.version_option(version=__version__)
+@click.version_option()
 def cli(yyyymmdd, input_glob, output_dir, cache_dir, size, resolution, dbz_field, window):
     """Max precipitation accumulation over moving window integration period."""
-    streamlogger_setup(logger, logging.INFO)
+    parent_logger = logging.getLogger('maksitiirain')
+    streamlogger_setup(parent_logger, logging.INFO)
+    logger.info(f'sademaksit, version {__version__}')
     if resolution is None:
         if size>1999:
             resolution = 250
