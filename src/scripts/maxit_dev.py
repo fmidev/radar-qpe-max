@@ -2,7 +2,8 @@ import os
 import logging
 import datetime
 
-from maksitiirain import maxit, two_day_glob, streamlogger_setup
+from maksitiirain import maxit, two_day_glob
+from maksitiirain.logging import streamlogger_setup
 
 
 logger = logging.getLogger('maksitiirain')

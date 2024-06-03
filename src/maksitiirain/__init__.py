@@ -85,12 +85,14 @@ def create_grid(radar: pyart.core.Radar, size: int = 2048,
                    (radar_x-r_m, radar_x+r_m),
                    (radar_y-r_m, radar_y+r_m))
     grid = pyart.map.grid_from_radars(radar, gatefilters=gf,
+                                      gridding_algo='map_gates_to_grid',
                                       grid_shape=grid_shape,
                                       grid_limits=grid_limits, fields=[LWE],
                                       grid_projection=projd_target,
                                       grid_origin=(0, 0),
                                       grid_origin_alt=0,
                                       map_roi=True,
+                                      nb=1.5,
                                       roi_func='dist_beam')
     grid.x['data'] = grid.x['data'].flatten()
     grid.y['data'] = grid.y['data'].flatten()
@@ -114,6 +116,7 @@ def save_precip_grid(radar: pyart.core.Radar, cachefile: str,
     rda.attrs.update(source2dict(radar.metadata['source']))
     # TODO: retain existing history if any
     rda.attrs.update({'history': __version__})
+    # TODO: write to a single file
     rda.to_netcdf(cachefile, encoding=DEFAULT_ENCODING)
     if isinstance(tiffile, str):
         # TODO: hardcoded scan frequency assumption
@@ -207,7 +210,7 @@ def _write_tifs(dat: xr.Dataset, tifp: str, tift: str) -> None:
 def _prep_rds(ncglob: str, chunks: dict) -> xr.Dataset:
     """Prepare precip rate dataset."""
     logger.info('Loading cached precipitation rasters.')
-    rds = xr.open_mfdataset(ncglob, chunks=chunks, data_vars='minimal',
+    rds = xr.open_mfdataset(ncglob, data_vars='minimal',
                             engine='h5netcdf', parallel=True)
     logger.info('Rasters loaded.')
     chunks.update({'time': rds.sizes['time']})
@@ -226,7 +229,7 @@ def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
     if chunksize is None:
         chunksize = _autochunk(size)
     chunks = {'x': chunksize, 'y': chunksize}
-    spatialchuncks = chunks.copy()
+    spatialchunks = chunks.copy()
     corr = '_c' if 'C' in dbz_field else '' # mark attenuation correction
     os.makedirs(cache_dir, exist_ok=True)
     logger.info('Updating precipitation raster cache.')
@@ -251,7 +254,7 @@ def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
     accums = (rollsel[LWE].rolling({'time': iwin}).sum()/12).to_dataset()
     accums = accums.rename({LWE: ACC})
     dat = accums.max('time').rio.write_crs(EPSG_TARGET)
-    dat['time'] = accums[ACC].idxmax(dim='time', keep_attrs=True).chunk(spatialchuncks)
+    dat['time'] = accums[ACC].idxmax(dim='time', keep_attrs=True).chunk(spatialchunks)
     dat = dat.compute()
     tstamp = accums.time[-1].dt.strftime(DATEFMT).item()
     dat = _write_attrs(dat, rds.attrs, win)
