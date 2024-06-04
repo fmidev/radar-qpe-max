@@ -82,7 +82,7 @@ def create_grid(radar: pyart.core.Radar, size: int = 2048,
     r_m = size*resolution/2
     radar_alt = radar.altitude['data'][0]
     grid_shape = (1, size, size)
-    grid_limits = ((0, 10000.0), # upper limit does not seem to matter
+    grid_limits = ((0, 10000), # upper limit does not seem to matter
                    (radar_x-r_m, radar_x+r_m),
                    (radar_y-r_m, radar_y+r_m))
     grid = pyart.map.grid_from_radars(radar, gatefilters=gf,
@@ -93,6 +93,7 @@ def create_grid(radar: pyart.core.Radar, size: int = 2048,
                                       grid_origin=(0, 0),
                                       grid_origin_alt=radar_alt,
                                       h_factor=(30,1,1),
+                                      min_radius=290,
                                       roi_func='dist_beam')
     grid.x['data'] = grid.x['data'].flatten()
     grid.y['data'] = grid.y['data'].flatten()

@@ -16,7 +16,7 @@ radar = pyart.aux_io.read_odim_h5(fpath, include_datasets=['dataset1'],
 
 for field in radar.fields:
     radar.fields[field]['data'].mask = False
-#radar.fields[ZH]['data'] = np.ones_like(radar.fields[ZH]['data'])*40
+radar.fields[ZH]['data'] = np.ones_like(radar.fields[ZH]['data'])*40
 z_r_qpe(radar, dbz_field=ZH)
 
-maksitiirain.save_precip_grid(radar, '/tmp/precip_grid.nc', tiffile='/tmp/precip_grid.tif', size=1024, resolution=500)
+maksitiirain.save_precip_grid(radar, '/tmp/precip_grid.nc', tiffile='/tmp/precip_grid.tif', size=2048, resolution=250)
