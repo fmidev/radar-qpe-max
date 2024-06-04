@@ -80,8 +80,9 @@ def create_grid(radar: pyart.core.Radar, size: int = 2048,
     radar_y, radar_x = transp.transform(radar.latitude['data'][0],
                                         radar.longitude['data'][0])
     r_m = size*resolution/2
+    radar_alt = radar.altitude['data'][0]
     grid_shape = (1, size, size)
-    grid_limits = ((0, 5000),
+    grid_limits = ((0, 10000.0), # upper limit does not seem to matter
                    (radar_x-r_m, radar_x+r_m),
                    (radar_y-r_m, radar_y+r_m))
     grid = pyart.map.grid_from_radars(radar, gatefilters=gf,
@@ -90,9 +91,8 @@ def create_grid(radar: pyart.core.Radar, size: int = 2048,
                                       grid_limits=grid_limits, fields=[LWE],
                                       grid_projection=projd_target,
                                       grid_origin=(0, 0),
-                                      grid_origin_alt=0,
-                                      map_roi=True,
-                                      nb=1.5,
+                                      grid_origin_alt=radar_alt,
+                                      h_factor=(30,1,1),
                                       roi_func='dist_beam')
     grid.x['data'] = grid.x['data'].flatten()
     grid.y['data'] = grid.y['data'].flatten()
@@ -113,7 +113,10 @@ def save_precip_grid(radar: pyart.core.Radar, cachefile: str,
     rda = rds[LWE].fillna(0)
     rda.rio.write_crs(EPSG_TARGET, inplace=True)
     rda = rda.to_dataset()
-    rda.attrs.update(source2dict(radar.metadata['source']))
+    try:
+        rda.attrs.update(source2dict(radar.metadata['source']))
+    except KeyError:
+        logger.warning('No source metadata found.')
     # TODO: retain existing history if any
     rda.attrs.update({'history': __version__})
     # TODO: write to a single file
