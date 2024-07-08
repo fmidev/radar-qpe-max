@@ -30,6 +30,7 @@ EPSG_TARGET = 3067
 ZH = 'DBZH'
 ACC = 'lwe_accum'
 qpefmt = '{ts}{nod}{size}px{resolution}m{corr}'
+DATEGLOB = '????????????'
 QPE_CACHE_FMT = qpefmt + '.nc'
 QPE_TIF_FMT = qpefmt + '.tif'
 LWE_SCALE_FACTOR = 0.01
@@ -190,8 +191,10 @@ def _write_attrs(data: xr.Dataset, rdattrs: dict, win: str) -> xr.Dataset:
     return dat.rio.write_coordinate_system()
 
 
-def _autochunk(size: int) -> int:
+def _autochunk(size: int, debug: bool = False) -> int:
     """Set reasonable defaults for chunksize."""
+    if debug:
+        return 64
     if size > 1500:
         return 128 # to limit memory usage
     if size > 250:
@@ -213,10 +216,18 @@ def _write_tifs(dat: xr.Dataset, tifp: str, tift: str) -> None:
 def _prep_rds(ncglob: str, chunks: dict) -> xr.Dataset:
     """Prepare precip rate dataset."""
     logger.info('Loading cached precipitation rasters.')
+    # combine all files into a single dataset
+    logger.debug(f'raster file format: {ncglob}')
     rds = xr.open_mfdataset(ncglob, data_vars='minimal',
                             engine='h5netcdf', parallel=True)
+    # write dataset chunked by horizontal dimensions
+    ncpath = ncglob.replace(DATEGLOB, '')
+    encoding = DEFAULT_ENCODING.copy()
+    encoding.update({LWE: {'chunksizes': (1, chunks['y'], chunks['x'])}})
+    rds.to_netcdf(ncpath, encoding=encoding, engine='h5netcdf')
+    # reopen the dataset
+    rds = xr.open_dataset(ncpath, engine='h5netcdf')
     logger.info('Rasters loaded.')
-    rds = rds.chunk(chunks)
     rds['time'] = rds.indexes['time'].round('min')
     return rds.convert_calendar(calendar='standard', use_cftime=True)
 
@@ -225,11 +236,13 @@ def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
           cache_dir: str = DEFAULT_CACHE_DIR, size: int = 2048,
           resolution: int = 250, win: str = '1 D',
           chunksize: Optional[int] = None, ignore_cache: bool = False,
-          dbz_field: str = ZH) -> None:
+          dbz_field: str = ZH, debug: bool = False) -> None:
     """main logic"""
+    if debug:
+        logging.getLogger('maksitiirain').setLevel(logging.DEBUG)
     # very slow with small chunksize
     if chunksize is None:
-        chunksize = _autochunk(size)
+        chunksize = _autochunk(size, debug=debug)
     chunks = {'x': chunksize, 'y': chunksize}
     spatialchunks = chunks.copy()
     corr = '_c' if 'C' in dbz_field else '' # mark attenuation correction
@@ -238,7 +251,7 @@ def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
     nod = qpe_grids_caching(h5paths, size, resolution, ignore_cache,
                             resultsdir=resultsdir, cachedir=cache_dir,
                             dbz_field=dbz_field)
-    globstr = QPE_CACHE_FMT.format(ts='*', nod=nod, size=size,
+    globstr = QPE_CACHE_FMT.format(ts=DATEGLOB, nod=nod, size=size,
                                    resolution=resolution, corr=corr)
     ncglob = os.path.join(cache_dir, globstr)
     rds = _prep_rds(ncglob, chunks)

@@ -20,5 +20,5 @@ if __name__ == '__main__':
     #datadir = os.path.expanduser('~/data/polar/fivih')
     datadir = os.path.expanduser('~/data/polar/filuo')
     h5paths = two_day_glob(date, globfmt=os.path.join(datadir, '{date}*.h5'))
-    # size 128 or 256 can still be run on a laptop
-    maxit(date, h5paths, resultsdir, size=256, resolution=2000, ignore_cache=True)
+    # size 512 can still be run on a laptop with chunksize 64
+    maxit(date, h5paths, resultsdir, size=512, resolution=1000, ignore_cache=True, debug=True)
