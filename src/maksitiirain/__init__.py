@@ -110,8 +110,6 @@ def save_precip_grid(radar: pyart.core.Radar, cachefile: str,
     accumulation to `tiffile`."""
     grid = create_grid(radar, size=size, resolution=resolution)
     rds = grid.to_xarray().isel(z=0).reset_coords(drop=True)
-    rds['x'] = rds.x
-    rds['y'] = rds.y
     rda = rds[LWE].fillna(0)
     rda.rio.write_crs(EPSG_TARGET, inplace=True)
     rda = rda.to_dataset()
@@ -218,7 +216,6 @@ def _prep_rds(ncglob: str, chunks: dict) -> xr.Dataset:
     rds = xr.open_mfdataset(ncglob, data_vars='minimal',
                             engine='h5netcdf', parallel=True)
     logger.info('Rasters loaded.')
-    chunks.update({'time': rds.sizes['time']})
     rds = rds.chunk(chunks)
     rds['time'] = rds.indexes['time'].round('min')
     return rds.convert_calendar(calendar='standard', use_cftime=True)
