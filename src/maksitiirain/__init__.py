@@ -203,10 +203,14 @@ def _write_tifs(dat: xr.Dataset, tifp: str, tift: str) -> None:
 
 
 def _prep_rds(ncglob: str, chunksize: int) -> xr.Dataset:
-    """Prepare precip rate dataset."""
+    """Prepare precip rate dataset.
+
+    Load cached precipitation rasters from netcdf files and write them to a
+    single chunked netcdf file. Return the dataset with time rounded to minutes."""
     logger.info('Loading cached precipitation rasters.')
     # combine all files into a single dataset
     logger.debug(f'raster file format: {ncglob}')
+    # Errors on some machines with engine='h5netcdf'
     rds = xr.open_mfdataset(ncglob, data_vars='minimal',
                             engine='netcdf4', parallel=True)
     # write dataset chunked by horizontal dimensions
@@ -215,7 +219,7 @@ def _prep_rds(ncglob: str, chunksize: int) -> xr.Dataset:
     encoding.update({LWE: {'zlib': False,
                            'chunksizes': (1, chunksize, chunksize)}})
     rds.to_netcdf(ncpath, encoding=encoding, engine='h5netcdf')
-    # reopen the dataset
+    # reopen the dataset in chunks
     rds = xr.open_dataset(ncpath, engine='h5netcdf', chunks={'x': chunksize, 'y': chunksize})
     logger.info('Rasters loaded.')
     rds['time'] = rds.indexes['time'].round('min')
