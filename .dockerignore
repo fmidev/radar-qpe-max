@@ -131,6 +131,3 @@ dmypy.json
 # docker meta
 Dockerfile
 
-# git
-.gitignore
-# .git/ is needed for build version numbering
