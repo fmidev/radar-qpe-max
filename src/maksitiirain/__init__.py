@@ -191,17 +191,6 @@ def _write_attrs(data: xr.Dataset, rdattrs: dict, win: str) -> xr.Dataset:
     return dat.rio.write_coordinate_system()
 
 
-def _autochunk(size: int, debug: bool = False) -> int:
-    """Set reasonable defaults for chunksize."""
-    if debug:
-        return 64
-    if size > 1500:
-        return 128 # to limit memory usage
-    if size > 250:
-        return 256
-    return size
-
-
 def _write_tifs(dat: xr.Dataset, tifp: str, tift: str) -> None:
     """Write main geotiff products to files."""
     tunits = 'minutes since ' + str(dat.time.min().item())
@@ -227,7 +216,7 @@ def _prep_rds(ncglob: str, chunksize: int) -> xr.Dataset:
                            'chunksizes': (1, chunksize, chunksize)}})
     rds.to_netcdf(ncpath, encoding=encoding, engine='h5netcdf')
     # reopen the dataset
-    rds = xr.open_dataset(ncpath, engine='h5netcdf')
+    rds = xr.open_dataset(ncpath, engine='h5netcdf', chunks={'x': chunksize, 'y': chunksize})
     logger.info('Rasters loaded.')
     rds['time'] = rds.indexes['time'].round('min')
     return rds.convert_calendar(calendar='standard', use_cftime=True)
@@ -236,13 +225,11 @@ def _prep_rds(ncglob: str, chunksize: int) -> xr.Dataset:
 def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
           cache_dir: str = DEFAULT_CACHE_DIR, size: int = 2048,
           resolution: int = 250, win: str = '1 D',
-          chunksize: Optional[int] = None, ignore_cache: bool = False,
+          chunksize: int = 256, ignore_cache: bool = False,
           dbz_field: str = ZH, debug: bool = False) -> None:
     """main logic"""
     if debug:
         logging.getLogger('maksitiirain').setLevel(logging.DEBUG)
-    if chunksize is None:
-        chunksize = _autochunk(size, debug=debug)
     chunks = {'x': chunksize, 'y': chunksize}
     corr = '_c' if 'C' in dbz_field else '' # mark attenuation correction
     os.makedirs(cache_dir, exist_ok=True)
