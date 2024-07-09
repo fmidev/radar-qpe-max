@@ -208,7 +208,7 @@ def _prep_rds(ncglob: str, chunksize: int) -> xr.Dataset:
     # combine all files into a single dataset
     logger.debug(f'raster file format: {ncglob}')
     rds = xr.open_mfdataset(ncglob, data_vars='minimal',
-                            engine='h5netcdf', parallel=True)
+                            engine='netcdf4', parallel=True)
     # write dataset chunked by horizontal dimensions
     ncpath = ncglob.replace(DATEGLOB, '')
     encoding = DEFAULT_ENCODING.copy()
