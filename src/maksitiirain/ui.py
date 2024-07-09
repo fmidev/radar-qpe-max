@@ -5,7 +5,7 @@ import logging
 import click
 
 from maksitiirain import DATEFMT, DEFAULT_CACHE_DIR, two_day_glob, maxit, __version__
-from maksitiirain.logging import streamlogger_setup
+from maksitiirain.logs import streamlogger_setup
 
 
 logger = logging.getLogger(__name__)

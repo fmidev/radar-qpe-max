@@ -213,7 +213,7 @@ def _write_tifs(dat: xr.Dataset, tifp: str, tift: str) -> None:
     unidat.rio.to_raster(tift, compress='deflate')
 
 
-def _prep_rds(ncglob: str, chunks: dict) -> xr.Dataset:
+def _prep_rds(ncglob: str, chunksize: int) -> xr.Dataset:
     """Prepare precip rate dataset."""
     logger.info('Loading cached precipitation rasters.')
     # combine all files into a single dataset
@@ -223,7 +223,8 @@ def _prep_rds(ncglob: str, chunks: dict) -> xr.Dataset:
     # write dataset chunked by horizontal dimensions
     ncpath = ncglob.replace(DATEGLOB, '')
     encoding = DEFAULT_ENCODING.copy()
-    encoding.update({LWE: {'chunksizes': (1, chunks['y'], chunks['x'])}})
+    encoding.update({LWE: {'zlib': False,
+                           'chunksizes': (1, chunksize, chunksize)}})
     rds.to_netcdf(ncpath, encoding=encoding, engine='h5netcdf')
     # reopen the dataset
     rds = xr.open_dataset(ncpath, engine='h5netcdf')
@@ -240,11 +241,9 @@ def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
     """main logic"""
     if debug:
         logging.getLogger('maksitiirain').setLevel(logging.DEBUG)
-    # very slow with small chunksize
     if chunksize is None:
         chunksize = _autochunk(size, debug=debug)
     chunks = {'x': chunksize, 'y': chunksize}
-    spatialchunks = chunks.copy()
     corr = '_c' if 'C' in dbz_field else '' # mark attenuation correction
     os.makedirs(cache_dir, exist_ok=True)
     logger.info('Updating precipitation raster cache.')
@@ -254,7 +253,7 @@ def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
     globstr = QPE_CACHE_FMT.format(ts=DATEGLOB, nod=nod, size=size,
                                    resolution=resolution, corr=corr)
     ncglob = os.path.join(cache_dir, globstr)
-    rds = _prep_rds(ncglob, chunks)
+    rds = _prep_rds(ncglob, chunksize)
     win_trim = win.replace(' ', '')
     winlow = win_trim.lower()
     # number of timesteps in window
@@ -269,7 +268,7 @@ def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
     accums = (rollsel[LWE].rolling({'time': iwin}).sum()/12).to_dataset()
     accums = accums.rename({LWE: ACC})
     dat = accums.max('time').rio.write_crs(EPSG_TARGET)
-    dat['time'] = accums[ACC].idxmax(dim='time', keep_attrs=True).chunk(spatialchunks)
+    dat['time'] = accums[ACC].idxmax(dim='time', keep_attrs=True).chunk(chunks)
     dat = dat.compute()
     tstamp = accums.time[-1].dt.strftime(DATEFMT).item()
     dat = _write_attrs(dat, rds.attrs, win)
