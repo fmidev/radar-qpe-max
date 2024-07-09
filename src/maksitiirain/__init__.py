@@ -212,7 +212,7 @@ def _prep_rds(ncglob: str, chunksize: int) -> xr.Dataset:
     logger.debug(f'raster file format: {ncglob}')
     # Errors on some machines with engine='h5netcdf'
     rds = xr.open_mfdataset(ncglob, data_vars='minimal',
-                            engine='netcdf4', parallel=True)
+                            engine='netcdf4')
     # write dataset chunked by horizontal dimensions
     ncpath = ncglob.replace(DATEGLOB, '')
     encoding = DEFAULT_ENCODING.copy()
