@@ -11,9 +11,11 @@ from glob import glob
 from typing import Optional, List
 
 # pypi
+import h5py
 import xarray as xr
 import rioxarray
 import pyart
+from pyart.aux_io.odim_h5 import _to_str
 from pyart.graph.common import generate_radar_time_begin
 import numpy as np
 import pandas as pd
@@ -130,6 +132,12 @@ def save_precip_grid(radar: pyart.core.Radar, cachefile: str,
         acc.rio.to_raster(tiffile, dtype='uint16', compress='deflate')
 
 
+def sweep_start_timestamp(hfile: h5py.File, dset: str) -> datetime.datetime:
+    dset_what = hfile[dset]["what"].attrs
+    start_str = _to_str(dset_what["startdate"] + dset_what["starttime"])
+    return datetime.datetime.strptime(start_str, "%Y%m%d%H%M%S")
+
+
 def qpe_grids_caching(h5paths: List[str], size: int, resolution: int,
                       ignore_cache: bool, resultsdir: Optional[str] = None,
                       cachedir: str = DEFAULT_CACHE_DIR, dbz_field: str = ZH) -> str:
@@ -139,17 +147,20 @@ def qpe_grids_caching(h5paths: List[str], size: int, resolution: int,
         tifdir = os.path.join(resultsdir, 'scan_accums')
         os.makedirs(tifdir, exist_ok=True)
     for fpath in h5paths:
-        # read only the lowest elevation
-        radar = pyart.aux_io.read_odim_h5(fpath, include_datasets=['dataset1'],
-                                          file_field_names=True)
-        t = generate_radar_time_begin(radar)
-        ts = t.strftime('%Y%m%d%H%M')
-        nod = source2dict(radar.metadata['source'])['NOD']
+        # read ts and NOD using h5py for increased performance
+        with h5py.File(fpath, 'r') as h5f:
+            t = sweep_start_timestamp(h5f, '/dataset1')
+            ts = t.strftime('%Y%m%d%H%M')
+            source = _to_str(h5f['/what'].attrs['source'])
+            nod = source.split('NOD:')[1].split(',')[0]
         cachefname = QPE_CACHE_FMT.format(ts=ts, nod=nod, size=size,
                                           resolution=resolution, corr=corr)
         cachefile = os.path.join(cachedir, cachefname)
         if os.path.isfile(cachefile) and not ignore_cache:
             continue
+        # read only the lowest elevation
+        radar = pyart.aux_io.read_odim_h5(fpath, include_datasets=['dataset1'],
+                                          file_field_names=True)
         if isinstance(resultsdir, str):
             tifname = QPE_TIF_FMT.format(ts=ts, nod=nod, size=size,
                                          resolution=resolution, corr=corr)
