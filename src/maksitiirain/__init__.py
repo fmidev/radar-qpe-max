@@ -16,7 +16,6 @@ import xarray as xr
 import rioxarray
 import pyart
 from pyart.aux_io.odim_h5 import _to_str
-from pyart.graph.common import generate_radar_time_begin
 import numpy as np
 import pandas as pd
 from pyproj import Transformer, CRS
@@ -142,6 +141,7 @@ def qpe_grids_caching(h5paths: List[str], size: int, resolution: int,
                       ignore_cache: bool, resultsdir: Optional[str] = None,
                       cachedir: str = DEFAULT_CACHE_DIR, dbz_field: str = ZH) -> str:
     """batch QPE on ODIM h5 radar data"""
+    dset = 'dataset1'
     corr = '_c' if 'C' in dbz_field else ''
     if isinstance(resultsdir, str):
         tifdir = os.path.join(resultsdir, 'scan_accums')
@@ -149,7 +149,7 @@ def qpe_grids_caching(h5paths: List[str], size: int, resolution: int,
     for fpath in h5paths:
         # read ts and NOD using h5py for increased performance
         with h5py.File(fpath, 'r') as h5f:
-            t = sweep_start_timestamp(h5f, '/dataset1')
+            t = sweep_start_timestamp(h5f, f'/{dset}')
             ts = t.strftime('%Y%m%d%H%M')
             source = _to_str(h5f['/what'].attrs['source'])
             nod = source.split('NOD:')[1].split(',')[0]
@@ -159,7 +159,7 @@ def qpe_grids_caching(h5paths: List[str], size: int, resolution: int,
         if os.path.isfile(cachefile) and not ignore_cache:
             continue
         # read only the lowest elevation
-        radar = pyart.aux_io.read_odim_h5(fpath, include_datasets=['dataset1'],
+        radar = pyart.aux_io.read_odim_h5(fpath, include_datasets=[dset],
                                           file_field_names=True)
         if isinstance(resultsdir, str):
             tifname = QPE_TIF_FMT.format(ts=ts, nod=nod, size=size,
