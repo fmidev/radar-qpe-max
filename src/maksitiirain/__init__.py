@@ -218,9 +218,9 @@ def _prep_rds(ncglob: str, chunksize: int) -> xr.Dataset:
     encoding = DEFAULT_ENCODING.copy()
     encoding.update({LWE: {'zlib': False,
                            'chunksizes': (1, chunksize, chunksize)}})
-    rds.to_netcdf(ncpath, encoding=encoding, engine='h5netcdf')
+    rds.to_netcdf(ncpath, encoding=encoding)
     # reopen the dataset in chunks
-    rds = xr.open_dataset(ncpath, engine='h5netcdf', chunks={'x': chunksize, 'y': chunksize})
+    rds = xr.open_dataset(ncpath, chunks={'x': chunksize, 'y': chunksize})
     logger.info('Rasters loaded.')
     rds['time'] = rds.indexes['time'].round('min')
     return rds.convert_calendar(calendar='standard', use_cftime=True)
