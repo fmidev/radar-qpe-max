@@ -155,9 +155,10 @@ def qpe_grid_caching(h5path: str, size: int, resolution: int,
     cachefname = QPE_CACHE_FMT.format(ts=ts, nod=nod, size=size,
                                       resolution=resolution, corr=corr)
     cachefile = os.path.join(cachedir, cachefname)
-    logger.debug(f'cachefile: {cachefile}')
     if os.path.isfile(cachefile) and not ignore_cache:
+        logger.debug(f'Cache file {cachefile} exists.')
         return nod
+    logger.debug(f'Creating cache file {cachefile}')
     radar = pyart.aux_io.read_odim_h5(h5path, include_datasets=[dset],
                                       file_field_names=True)
     if isinstance(resultsdir, str):
@@ -222,16 +223,17 @@ def _prep_rds(ncglob: str, chunksize: int, date: datetime.date) -> xr.Dataset:
     logger.debug(f'raster file format: {ncglob}')
     # Errors on some machines with engine='h5netcdf'
     rds = xr.open_mfdataset(ncglob, data_vars='minimal',
-                            engine='h5netcdf')
+                            engine='h5netcdf', phony_dims='sort')
     # write dataset chunked by horizontal dimensions
     ncpath = ncglob.replace(DATEGLOB, date.strftime(DATEFMT))
     encoding = DEFAULT_ENCODING.copy()
     encoding.update({LWE: {'zlib': False,
                            'chunksizes': (1, chunksize, chunksize)}})
     logger.debug(f'Writing chunked dataset {ncpath}')
-    rds.to_netcdf(ncpath, encoding=encoding)
+    rds.to_netcdf(ncpath, encoding=encoding, engine='h5netcdf')
     # reopen the dataset in chunks
-    rds = xr.open_dataset(ncpath, chunks={'x': chunksize, 'y': chunksize})
+    rds = xr.open_dataset(ncpath, chunks={'x': chunksize, 'y': chunksize},
+                          engine='h5netcdf')
     logger.info('Rasters loaded.')
     rds['time'] = rds.indexes['time'].round('min')
     return rds.convert_calendar(calendar='standard', use_cftime=True)
