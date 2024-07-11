@@ -52,5 +52,5 @@ def cli(yyyymmdd, input_glob, output_dir, cache_dir, size, chunksize, resolution
             resolution = 2000
     date = datetime.datetime.strptime(yyyymmdd, DATEFMT)
     h5paths = two_day_glob(date, globfmt=input_glob)
-    maxit(date, h5paths, output_dir, cache_dir=cache_dir, size=size, chunksize=chunksize,
+    maxit(date, h5paths, output_dir, cachedir=cache_dir, size=size, chunksize=chunksize,
           resolution=resolution, dbz_field=dbz_field, win=window)

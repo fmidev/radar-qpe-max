@@ -23,4 +23,4 @@ if __name__ == '__main__':
     cachedir = os.path.expanduser('~/.cache/sademaksit')
     # size 1024 or 2048 can still be run on a laptop with chunksize 256
     maxit(date, h5paths, resultsdir, size=512, resolution=1000, chunksize=256,
-          ignore_cache=True, cache_dir=cachedir, debug=True)
+          ignore_cache=True, cachedir=cachedir, debug=True)

@@ -121,7 +121,7 @@ def save_precip_grid(radar: pyart.core.Radar, cachefile: str,
         logger.warning('No source metadata found.')
     # TODO: retain existing history if any
     rda.attrs.update({'history': __version__})
-    # TODO: write to a single file
+    # netcdf4 engine causes HDF error on some machines
     rda.to_netcdf(cachefile, encoding=DEFAULT_ENCODING, engine='h5netcdf')
     if isinstance(tiffile, str):
         # TODO: hardcoded scan frequency assumption
@@ -138,38 +138,35 @@ def sweep_start_datetime(hfile: h5py.File, dset: str) -> datetime.datetime:
     return datetime.datetime.strptime(start_str, "%Y%m%d%H%M%S")
 
 
-def qpe_grids_caching(h5paths: List[str], size: int, resolution: int,
-                      ignore_cache: bool, resultsdir: Optional[str] = None,
-                      cachedir: str = DEFAULT_CACHE_DIR, dbz_field: str = ZH) -> str:
-    """batch QPE on ODIM h5 radar data"""
-    dset = 'dataset1'
+def qpe_grid_caching(h5path: str, size: int, resolution: int,
+                     ignore_cache: bool, resultsdir: Optional[str] = None,
+                     cachedir: str = DEFAULT_CACHE_DIR, dbz_field: str = ZH) -> str:
+    dset = 'dataset1' # lowest elevation
     corr = '_c' if 'C' in dbz_field else ''
     if isinstance(resultsdir, str):
         tifdir = os.path.join(resultsdir, 'scan_accums')
         os.makedirs(tifdir, exist_ok=True)
-    for fpath in h5paths:
-        # read ts and NOD using h5py for increased performance
-        with h5py.File(fpath, 'r') as h5f:
-            t = sweep_start_datetime(h5f, f'/{dset}')
-            ts = t.strftime('%Y%m%d%H%M')
-            source = _to_str(h5f['/what'].attrs['source'])
-            nod = source.split('NOD:')[1].split(',')[0]
-        cachefname = QPE_CACHE_FMT.format(ts=ts, nod=nod, size=size,
-                                          resolution=resolution, corr=corr)
-        cachefile = os.path.join(cachedir, cachefname)
-        logger.debug(f'cachefile: {cachefile}')
-        if os.path.isfile(cachefile) and not ignore_cache:
-            continue
-        # read only the lowest elevation
-        radar = pyart.aux_io.read_odim_h5(fpath, include_datasets=[dset],
-                                          file_field_names=True)
-        if isinstance(resultsdir, str):
-            tifname = QPE_TIF_FMT.format(ts=ts, nod=nod, size=size,
-                                         resolution=resolution, corr=corr)
-            tiffile = os.path.join(tifdir, tifname)
-        z_r_qpe(radar, dbz_field=dbz_field)
-        save_precip_grid(radar, cachefile, tiffile=tiffile, size=size,
-                         resolution=resolution)
+    # read ts and NOD using h5py for increased performance
+    with h5py.File(h5path, 'r') as h5f:
+        t = sweep_start_datetime(h5f, f'/{dset}')
+        ts = t.strftime('%Y%m%d%H%M')
+        source = _to_str(h5f['/what'].attrs['source'])
+        nod = source.split('NOD:')[1].split(',')[0]
+    cachefname = QPE_CACHE_FMT.format(ts=ts, nod=nod, size=size,
+                                      resolution=resolution, corr=corr)
+    cachefile = os.path.join(cachedir, cachefname)
+    logger.debug(f'cachefile: {cachefile}')
+    if os.path.isfile(cachefile) and not ignore_cache:
+        return nod
+    radar = pyart.aux_io.read_odim_h5(h5path, include_datasets=[dset],
+                                      file_field_names=True)
+    if isinstance(resultsdir, str):
+        tifname = QPE_TIF_FMT.format(ts=ts, nod=nod, size=size,
+                                     resolution=resolution, corr=corr)
+        tiffile = os.path.join(tifdir, tifname)
+    z_r_qpe(radar, dbz_field=dbz_field)
+    save_precip_grid(radar, cachefile, tiffile=tiffile, size=size,
+                     resolution=resolution)
     return nod
 
 
@@ -215,7 +212,7 @@ def _write_tifs(dat: xr.Dataset, tifp: str, tift: str) -> None:
     unidat.rio.to_raster(tift, compress='deflate')
 
 
-def _prep_rds(ncglob: str, chunksize: int) -> xr.Dataset:
+def _prep_rds(ncglob: str, chunksize: int, date: datetime.date) -> xr.Dataset:
     """Prepare precip rate dataset.
 
     Load cached precipitation rasters from netcdf files and write them to a
@@ -225,12 +222,13 @@ def _prep_rds(ncglob: str, chunksize: int) -> xr.Dataset:
     logger.debug(f'raster file format: {ncglob}')
     # Errors on some machines with engine='h5netcdf'
     rds = xr.open_mfdataset(ncglob, data_vars='minimal',
-                            engine='netcdf4')
+                            engine='h5netcdf')
     # write dataset chunked by horizontal dimensions
-    ncpath = ncglob.replace(DATEGLOB, '')
+    ncpath = ncglob.replace(DATEGLOB, date.strftime(DATEFMT))
     encoding = DEFAULT_ENCODING.copy()
     encoding.update({LWE: {'zlib': False,
                            'chunksizes': (1, chunksize, chunksize)}})
+    logger.debug(f'Writing chunked dataset {ncpath}')
     rds.to_netcdf(ncpath, encoding=encoding)
     # reopen the dataset in chunks
     rds = xr.open_dataset(ncpath, chunks={'x': chunksize, 'y': chunksize})
@@ -240,7 +238,7 @@ def _prep_rds(ncglob: str, chunksize: int) -> xr.Dataset:
 
 
 def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
-          cache_dir: str = DEFAULT_CACHE_DIR, size: int = 2048,
+          cachedir: str = DEFAULT_CACHE_DIR, size: int = 2048,
           resolution: int = 250, win: str = '1 D',
           chunksize: int = 256, ignore_cache: bool = False,
           dbz_field: str = ZH, debug: bool = False) -> None:
@@ -249,15 +247,16 @@ def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
         logging.getLogger('maksitiirain').setLevel(logging.DEBUG)
     chunks = {'x': chunksize, 'y': chunksize}
     corr = '_c' if 'C' in dbz_field else '' # mark attenuation correction
-    os.makedirs(cache_dir, exist_ok=True)
+    os.makedirs(cachedir, exist_ok=True)
     logger.info('Updating precipitation raster cache.')
-    nod = qpe_grids_caching(h5paths, size, resolution, ignore_cache,
-                            resultsdir=resultsdir, cachedir=cache_dir,
-                            dbz_field=dbz_field)
+    for fpath in h5paths:
+        nod = qpe_grid_caching(fpath, size, resolution, ignore_cache,
+                               resultsdir=resultsdir,
+                               cachedir=cachedir, dbz_field=dbz_field)
     globstr = QPE_CACHE_FMT.format(ts=DATEGLOB, nod=nod, size=size,
                                    resolution=resolution, corr=corr)
-    ncglob = os.path.join(cache_dir, globstr)
-    rds = _prep_rds(ncglob, chunksize)
+    ncglob = os.path.join(cachedir, globstr)
+    rds = _prep_rds(ncglob, chunksize, date)
     win_trim = win.replace(' ', '')
     winlow = win_trim.lower()
     # number of timesteps in window
