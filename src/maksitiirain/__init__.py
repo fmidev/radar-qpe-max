@@ -157,6 +157,7 @@ def qpe_grids_caching(h5paths: List[str], size: int, resolution: int,
         cachefname = QPE_CACHE_FMT.format(ts=ts, nod=nod, size=size,
                                           resolution=resolution, corr=corr)
         cachefile = os.path.join(cachedir, cachefname)
+        logger.debug(f'cachefile: {cachefile}')
         if os.path.isfile(cachefile) and not ignore_cache:
             continue
         # read only the lowest elevation
