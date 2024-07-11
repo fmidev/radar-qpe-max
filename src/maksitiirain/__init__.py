@@ -122,7 +122,7 @@ def save_precip_grid(radar: pyart.core.Radar, cachefile: str,
     # TODO: retain existing history if any
     rda.attrs.update({'history': __version__})
     # TODO: write to a single file
-    rda.to_netcdf(cachefile, encoding=DEFAULT_ENCODING)
+    rda.to_netcdf(cachefile, encoding=DEFAULT_ENCODING, engine='h5netcdf')
     if isinstance(tiffile, str):
         # TODO: hardcoded scan frequency assumption
         acc = (rda.isel(time=0)[LWE]/12).rename(ACC)
