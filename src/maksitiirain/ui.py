@@ -11,10 +11,8 @@ from maksitiirain.logs import streamlogger_setup
 logger = logging.getLogger(__name__)
 
 # multi-line help strings
-CHUNKSIZE_HELP = """
-Horizontal chunksize PX*PX. Larger chunksize speeds up the processing but
-requires more memory.
-"""
+CHUNKSIZE_HELP = "Horizontal chunksize PX*PX. Larger chunksize speeds up the processing but " \
+    "requires more memory."
 
 
 @click.command()

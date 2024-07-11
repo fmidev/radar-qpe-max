@@ -131,7 +131,8 @@ def save_precip_grid(radar: pyart.core.Radar, cachefile: str,
         acc.rio.to_raster(tiffile, dtype='uint16', compress='deflate')
 
 
-def sweep_start_timestamp(hfile: h5py.File, dset: str) -> datetime.datetime:
+def sweep_start_datetime(hfile: h5py.File, dset: str) -> datetime.datetime:
+    """Get the starting time of the sweep defined by the dataset."""
     dset_what = hfile[dset]["what"].attrs
     start_str = _to_str(dset_what["startdate"] + dset_what["starttime"])
     return datetime.datetime.strptime(start_str, "%Y%m%d%H%M%S")
@@ -149,7 +150,7 @@ def qpe_grids_caching(h5paths: List[str], size: int, resolution: int,
     for fpath in h5paths:
         # read ts and NOD using h5py for increased performance
         with h5py.File(fpath, 'r') as h5f:
-            t = sweep_start_timestamp(h5f, f'/{dset}')
+            t = sweep_start_datetime(h5f, f'/{dset}')
             ts = t.strftime('%Y%m%d%H%M')
             source = _to_str(h5f['/what'].attrs['source'])
             nod = source.split('NOD:')[1].split(',')[0]
