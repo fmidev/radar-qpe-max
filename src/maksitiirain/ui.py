@@ -15,7 +15,20 @@ CHUNKSIZE_HELP = "Horizontal chunksize PX*PX. Larger chunksize speeds up the pro
     "requires more memory."
 
 
-@click.command()
+@click.group()
+@click.option('-v', '--verbose', is_flag=True, help='debug logging')
+@click.version_option()
+def cli(verbose):
+    parent_logger = logging.getLogger('maksitiirain')
+    if verbose:
+        log_level = logging.DEBUG
+    else:
+        log_level = logging.INFO
+    streamlogger_setup(parent_logger, log_level)
+    logger.info(f'qpe, version {__version__}')
+
+
+@cli.command()
 @click.argument('yyyymmdd')
 @click.option('-i', '--input-glob', metavar='PATTERN', required=True,
               help='glob pattern of the input data. Available variables: {yyyy}, {mm}, {dd}, {date}')
@@ -26,17 +39,8 @@ CHUNKSIZE_HELP = "Horizontal chunksize PX*PX. Larger chunksize speeds up the pro
 @click.option('-r', '--resolution', metavar='METRE', help='spatial resolution in meters')
 @click.option('-w', '--window', metavar='WIN', help='length of the time window, e.g. 1D for 1 day', default='1 D')
 @click.option('-z', '--dbz-field', metavar='FIELD', help='use FIELD for DBZ', default='DBZH')
-@click.option('-v', '--verbose', is_flag=True, help='debug logging')
-@click.version_option()
-def cli(yyyymmdd, input_glob, output_dir, cache_dir, size, chunksize, resolution, dbz_field, window, verbose):
-    """Max precipitation accumulation over moving window integration period."""
-    parent_logger = logging.getLogger('maksitiirain')
-    if verbose:
-        log_level = logging.DEBUG
-    else:
-        log_level = logging.INFO
-    streamlogger_setup(parent_logger, log_level)
-    logger.info(f'sademaksit, version {__version__}')
+def winmax(yyyymmdd, input_glob, output_dir, cache_dir, size, chunksize, resolution, dbz_field, window, verbose):
+    """Max precipitation accumulation over moving temporal window."""
     if chunksize > size:
         logger.warning(f'chunksize {chunksize} is larger than size {size}.')
         logger.warning('Using size as chunksize.')

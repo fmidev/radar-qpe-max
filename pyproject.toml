@@ -35,7 +35,7 @@ Issues = "https://github.com/fmidev/sademaksit/issues"
 Source = "https://github.com/fmidev/sademaksit"
 
 [project.scripts]
-maksitiirain = "maksitiirain.ui:cli"
+qpe = "maksitiirain.ui:cli"
 
 [tool.hatch.version]
 source = "vcs"
