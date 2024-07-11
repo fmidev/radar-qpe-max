@@ -165,6 +165,8 @@ def qpe_grid_caching(h5path: str, size: int, resolution: int,
         tifname = QPE_TIF_FMT.format(ts=ts, nod=nod, size=size,
                                      resolution=resolution, corr=corr)
         tiffile = os.path.join(tifdir, tifname)
+    else:
+        tiffile = None
     z_r_qpe(radar, dbz_field=dbz_field)
     save_precip_grid(radar, cachefile, tiffile=tiffile, size=size,
                      resolution=resolution)
@@ -243,10 +245,8 @@ def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
           cachedir: str = DEFAULT_CACHE_DIR, size: int = 2048,
           resolution: int = 250, win: str = '1 D',
           chunksize: int = 256, ignore_cache: bool = False,
-          dbz_field: str = ZH, debug: bool = False) -> None:
-    """main logic"""
-    if debug:
-        logging.getLogger('maksitiirain').setLevel(logging.DEBUG)
+          dbz_field: str = ZH) -> None:
+    """Moving window maximum precipitation accumulation."""
     chunks = {'x': chunksize, 'y': chunksize}
     corr = '_c' if 'C' in dbz_field else '' # mark attenuation correction
     os.makedirs(cachedir, exist_ok=True)
