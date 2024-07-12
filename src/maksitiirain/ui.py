@@ -30,6 +30,7 @@ def autoresolution(size):
 @click.option('-v', '--verbose', is_flag=True, help='debug logging')
 @click.version_option()
 def cli(verbose):
+    """command line interface"""
     parent_logger = logging.getLogger('maksitiirain')
     if verbose:
         log_level = logging.DEBUG
@@ -72,7 +73,9 @@ def grid(h5file, size, resolution, force, tif_dir, out_dir, dbz_field):
 @click.option('-w', '--window', metavar='WIN', help='length of the time window, e.g. 1D for 1 day', default='1 D')
 @click.option('-z', '--dbz-field', metavar='FIELD', help='use FIELD for DBZ', default='DBZH')
 def winmax(yyyymmdd, input_glob, output_dir, cache_dir, size, chunksize, resolution, dbz_field, window):
-    """Max precipitation accumulation over moving temporal window."""
+    """Maximum precipitation accumulation over moving temporal window.
+
+    YYYYMMDD is the date over which the end of the time window moves."""
     if chunksize > size:
         logger.warning(f'chunksize {chunksize} is larger than size {size}.')
         logger.warning('Using size as chunksize.')
