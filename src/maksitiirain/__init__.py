@@ -4,6 +4,7 @@
 
 # builtin
 import os
+import re
 import logging
 import datetime
 import warnings
@@ -216,18 +217,16 @@ def _write_tifs(dat: xr.Dataset, tifp: str, tift: str) -> None:
     unidat.rio.to_raster(tift, compress='deflate')
 
 
-def _prep_rds(ncglob: str, chunksize: int, date: datetime.date, ignore_cache: bool) -> xr.Dataset:
+def _prep_rds(ncfiles: List[str], chunksize: int, date: datetime.date, ignore_cache: bool) -> xr.Dataset:
     """Prepare precip rate dataset.
 
     Load cached precipitation rasters from netcdf files and write them to a
     single chunked netcdf file. Return the dataset with time rounded to minutes."""
-    ncpath = ncglob.replace(DATEGLOB, date.strftime(DATEFMT))
+    ncpath = re.sub(r'\d{12}', date.strftime(DATEFMT), ncfiles[0])
     if not os.path.isfile(ncpath) or ignore_cache: # then create it
         logger.info('Loading cached individual precipitation rasters.')
         # combine all files into a single dataset
-        logger.debug(f'raster file format: {ncglob}')
-        # Errors on some machines with engine='h5netcdf'
-        rds = xr.open_mfdataset(ncglob, data_vars='minimal',
+        rds = xr.open_mfdataset(ncfiles, data_vars='minimal',
                                 engine='h5netcdf', phony_dims='sort')
         # write dataset chunked by horizontal dimensions
         encoding = DEFAULT_ENCODING.copy()
@@ -258,10 +257,10 @@ def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
         nod = qpe_grid_caching(fpath, size, resolution, ignore_cache,
                                resultsdir=resultsdir,
                                cachedir=cachedir, dbz_field=dbz_field)
-    globstr = QPE_CACHE_FMT.format(ts=DATEGLOB, nod=nod, size=size,
+    globfmt = QPE_CACHE_FMT.format(ts='{date}????', nod=nod, size=size,
                                    resolution=resolution, corr=corr)
-    ncglob = os.path.join(cachedir, globstr)
-    rds = _prep_rds(ncglob, chunksize, date, ignore_cache)
+    ncfiles = two_day_glob(date, globfmt=os.path.join(cachedir, globfmt))
+    rds = _prep_rds(ncfiles, chunksize, date, ignore_cache)
     win_trim = win.replace(' ', '')
     winlow = win_trim.lower()
     # number of timesteps in window
