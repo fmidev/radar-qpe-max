@@ -216,25 +216,27 @@ def _write_tifs(dat: xr.Dataset, tifp: str, tift: str) -> None:
     unidat.rio.to_raster(tift, compress='deflate')
 
 
-def _prep_rds(ncglob: str, chunksize: int, date: datetime.date) -> xr.Dataset:
+def _prep_rds(ncglob: str, chunksize: int, date: datetime.date, ignore_cache: bool) -> xr.Dataset:
     """Prepare precip rate dataset.
 
     Load cached precipitation rasters from netcdf files and write them to a
     single chunked netcdf file. Return the dataset with time rounded to minutes."""
-    logger.info('Loading cached precipitation rasters.')
-    # combine all files into a single dataset
-    logger.debug(f'raster file format: {ncglob}')
-    # Errors on some machines with engine='h5netcdf'
-    rds = xr.open_mfdataset(ncglob, data_vars='minimal',
-                            engine='h5netcdf', phony_dims='sort')
-    # write dataset chunked by horizontal dimensions
     ncpath = ncglob.replace(DATEGLOB, date.strftime(DATEFMT))
-    encoding = DEFAULT_ENCODING.copy()
-    encoding.update({LWE: {'zlib': False,
-                           'chunksizes': (1, chunksize, chunksize)}})
-    logger.debug(f'Writing chunked dataset {ncpath}')
-    rds.to_netcdf(ncpath, encoding=encoding, engine='h5netcdf')
+    if not os.path.isfile(ncpath) or ignore_cache: # then create it
+        logger.info('Loading cached individual precipitation rasters.')
+        # combine all files into a single dataset
+        logger.debug(f'raster file format: {ncglob}')
+        # Errors on some machines with engine='h5netcdf'
+        rds = xr.open_mfdataset(ncglob, data_vars='minimal',
+                                engine='h5netcdf', phony_dims='sort')
+        # write dataset chunked by horizontal dimensions
+        encoding = DEFAULT_ENCODING.copy()
+        encoding.update({LWE: {'zlib': False,
+                            'chunksizes': (1, chunksize, chunksize)}})
+        logger.debug(f'Writing chunked dataset {ncpath}')
+        rds.to_netcdf(ncpath, encoding=encoding, engine='h5netcdf')
     # reopen the dataset in chunks
+    logger.info(f'Loading chunked dataset {ncpath}')
     rds = xr.open_dataset(ncpath, chunks={'x': chunksize, 'y': chunksize},
                           engine='h5netcdf')
     logger.info('Rasters loaded.')
@@ -259,7 +261,7 @@ def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
     globstr = QPE_CACHE_FMT.format(ts=DATEGLOB, nod=nod, size=size,
                                    resolution=resolution, corr=corr)
     ncglob = os.path.join(cachedir, globstr)
-    rds = _prep_rds(ncglob, chunksize, date)
+    rds = _prep_rds(ncglob, chunksize, date, ignore_cache)
     win_trim = win.replace(' ', '')
     winlow = win_trim.lower()
     # number of timesteps in window
