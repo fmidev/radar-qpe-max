@@ -106,7 +106,7 @@ def create_grid(radar: pyart.core.Radar, size: int = 2048,
 
 def save_precip_grid(radar: pyart.core.Radar, cachefile: str,
                      tiffile: Optional[str] = None, size: int = 2048,
-                     resolution: int = 250) -> None:
+                     resolution: int = 250, scans_per_hour=12) -> None:
     """Save precipitation products from Radar objects to files.
 
     Precipitation rate is saved to netcdf `cachefile`, and optionally 5-minute
@@ -125,10 +125,10 @@ def save_precip_grid(radar: pyart.core.Radar, cachefile: str,
     # netcdf4 engine causes HDF error on some machines
     rda.to_netcdf(cachefile, encoding=DEFAULT_ENCODING, engine='h5netcdf')
     if isinstance(tiffile, str):
-        # TODO: hardcoded scan frequency assumption
-        acc = (rda.isel(time=0)[LWE]/12).rename(ACC)
+        acc = (rda.isel(time=0)[LWE]/scans_per_hour).rename(ACC)
         acc.attrs.update(ATTRS[ACC])
         acc.rio.update_encoding({'scale_factor': LWE_SCALE_FACTOR}, inplace=True)
+        logger.debug(f'Writing geotiff {tiffile}')
         acc.rio.to_raster(tiffile, dtype='uint16', compress='deflate')
 
 
@@ -141,7 +141,8 @@ def sweep_start_datetime(hfile: h5py.File, dset: str) -> datetime.datetime:
 
 def qpe_grid_caching(h5path: str, size: int, resolution: int,
                      ignore_cache: bool, resultsdir: Optional[str] = None,
-                     cachedir: str = DEFAULT_CACHE_DIR, dbz_field: str = ZH) -> str:
+                     cachedir: str = DEFAULT_CACHE_DIR, dbz_field: str = ZH,
+                     **kws) -> str:
     """Create precipitation grid cache file and optionally geotiff."""
     dset = 'dataset1' # lowest elevation
     corr = '_c' if 'C' in dbz_field else ''
@@ -171,7 +172,7 @@ def qpe_grid_caching(h5path: str, size: int, resolution: int,
         tiffile = None
     z_r_qpe(radar, dbz_field=dbz_field)
     save_precip_grid(radar, cachefile, tiffile=tiffile, size=size,
-                     resolution=resolution)
+                     resolution=resolution, **kws)
     return nod
 
 
@@ -243,6 +244,24 @@ def _prep_rds(ncfiles: List[str], chunksize: int, date: datetime.date, ignore_ca
     return rds.convert_calendar(calendar='standard', use_cftime=True)
 
 
+def tstep_from_fpaths(fpaths: List[str]) -> datetime.datetime:
+    """timestep length from filenames"""
+    tstep_default = pd.to_timedelta('5min')
+    # file paths like /path/to/202405280005_radar.polar.filuo.h5
+    # search for 12 digits in 2 consecutive file paths
+    tstep = pd.to_datetime(re.search(r'\d{12}', fpaths[1]).group())
+    tstep -= pd.to_datetime(re.search(r'\d{12}', fpaths[0]).group())
+    # double check with the last two files
+    tstep2 = pd.to_datetime(re.search(r'\d{12}', fpaths[-1]).group())
+    tstep2 -= pd.to_datetime(re.search(r'\d{12}', fpaths[-2]).group())
+    if tstep != tstep2:
+        logger.error('Inconsistent timestep lengths in file paths. Assuming 5min.')
+        return tstep_default
+    if tstep != tstep_default:
+        logger.warning(f'Unusual timestep length {tstep}.')
+    return tstep
+
+
 def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
           cachedir: str = DEFAULT_CACHE_DIR, size: int = 2048,
           resolution: int = 250, win: str = '1 D',
@@ -252,27 +271,33 @@ def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
     chunks = {'x': chunksize, 'y': chunksize}
     corr = '_c' if 'C' in dbz_field else '' # mark attenuation correction
     os.makedirs(cachedir, exist_ok=True)
+    # the guess is used only for geotiff accumulation scaling
+    tstep_guess = tstep_from_fpaths(h5paths)
+    acc_scaling_guess = datetime.timedelta(hours=1)/tstep_guess
     logger.info('Updating precipitation raster cache.')
     for fpath in h5paths:
         nod = qpe_grid_caching(fpath, size, resolution, ignore_cache,
                                resultsdir=resultsdir,
-                               cachedir=cachedir, dbz_field=dbz_field)
+                               cachedir=cachedir, dbz_field=dbz_field,
+                               scans_per_hour=acc_scaling_guess)
     globfmt = QPE_CACHE_FMT.format(ts='{date}????', nod=nod, size=size,
                                    resolution=resolution, corr=corr)
     ncfiles = two_day_glob(date, globfmt=os.path.join(cachedir, globfmt))
     rds = _prep_rds(ncfiles, chunksize, date, ignore_cache)
     win_trim = win.replace(' ', '')
     winlow = win_trim.lower()
-    # number of timesteps in window
+    # number of timesteps in window (e.g. 288 5min steps in a day)
     iwin = rds.time.groupby(rds.time.dt.floor(win_trim)).sizes['time']
     dwin = pd.to_timedelta(win)
     tind = rds.indexes['time']
+    # timestep length as timedelta
     tdelta = pd.to_timedelta(tind.freq) or pd.Series(tind).diff().median()
     tstep_last = pd.to_datetime(date+datetime.timedelta(days=1))-tdelta
     tstep_pre = pd.to_datetime(date)-dwin+tdelta
     rollsel = rds.sel(time=slice(tstep_pre, tstep_last))
-    # TODO: document why divide by 12
-    accums = (rollsel[LWE].rolling({'time': iwin}).sum()/12).to_dataset()
+    # The data is still precip rate, so scale to mm
+    acc_scaling = datetime.timedelta(hours=1)/tdelta # 12 for 5min steps
+    accums = (rollsel[LWE].rolling({'time': iwin}).sum()/acc_scaling).to_dataset()
     accums = accums.rename({LWE: ACC})
     dat = accums.max('time').rio.write_crs(EPSG_TARGET)
     dat['time'] = accums[ACC].idxmax(dim='time', keep_attrs=True).chunk(chunks)
