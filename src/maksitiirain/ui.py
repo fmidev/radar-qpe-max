@@ -65,7 +65,7 @@ def grid(h5file, size, resolution, force, tif_dir, out_dir, dbz_field):
 @click.argument('yyyymmdd')
 @click.option('-i', '--input-glob', metavar='PATTERN', required=True,
               help='glob pattern of the input data. Available variables: {yyyy}, {mm}, {dd}, {date}')
-@click.option('-o', '--output-dir', metavar='DIR', help='write output here', required=True)
+@click.option('-o', '--output-dir', metavar='DIR', help='destination of geotiff output', required=True)
 @click.option('-c', '--cache-dir', metavar='DIR', help='cache directory', default=DEFAULT_CACHE_DIR)
 @click.option('-s', '--size', metavar='PX', help='output raster size PX*PX', default=1024)
 @click.option('-x', '--chunksize', metavar='PX', help=CHUNKSIZE_HELP, default=256)
