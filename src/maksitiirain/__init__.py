@@ -48,6 +48,7 @@ ATTRS = {ACC: {'units': 'mm',
          'time': {'long_name': 'end time of maximum precipitation accumulation period',
                   '_FillValue': UINT16_FILLVAL}}
 DEFAULT_CACHE_DIR = '/tmp/maksicache'
+COG_COMPRESS = 'LZW'
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +107,8 @@ def create_grid(radar: pyart.core.Radar, size: int = 2048,
 
 def save_precip_grid(radar: pyart.core.Radar, cachefile: str,
                      tiffile: Optional[str] = None, size: int = 2048,
-                     resolution: int = 250, scans_per_hour=12) -> None:
+                     resolution: int = 250, scans_per_hour: int = 12,
+                     blocksize: int = 512) -> None:
     """Save precipitation products from Radar objects to files.
 
     Precipitation rate is saved to netcdf `cachefile`, and optionally 5-minute
@@ -129,7 +131,11 @@ def save_precip_grid(radar: pyart.core.Radar, cachefile: str,
         acc.attrs.update(ATTRS[ACC])
         acc.rio.update_encoding({'scale_factor': LWE_SCALE_FACTOR}, inplace=True)
         logger.debug(f'Writing geotiff {tiffile}')
-        acc.rio.to_raster(tiffile, dtype='uint16', compress='deflate')
+        acc.rio.to_raster(
+            tiffile, driver='COG',
+            dtype='uint16', compress=COG_COMPRESS,
+            blocksize=blocksize,
+        )
 
 
 def sweep_start_datetime(hfile: h5py.File, dset: str) -> datetime.datetime:
@@ -207,15 +213,23 @@ def _write_attrs(data: xr.Dataset, rdattrs: dict, win: str) -> xr.Dataset:
     return dat.rio.write_coordinate_system()
 
 
-def _write_tifs(dat: xr.Dataset, tifp: str, tift: str) -> None:
+def _write_tifs(dat: xr.Dataset, tifp: str, tift: str, blocksize: int = 512) -> None:
     """Write main geotiff products to files."""
     tunits = 'minutes since ' + str(dat.time.min().item())
     enc = {'time': {'units': tunits, 'calendar': 'proleptic_gregorian'}}
     dat.rio.update_encoding(enc, inplace=True)
-    dat[ACC].rio.to_raster(tifp, dtype='uint16', compress='deflate')
-    dat['time'].rio.to_raster(tift, dtype='uint16', compress='deflate')
+    dat[ACC].rio.to_raster(
+        tifp, driver='COG',
+        dtype='uint16', compress=COG_COMPRESS,
+        blocksize=blocksize,
+    )
+    dat['time'].rio.to_raster(tift, dtype='uint16', compress=COG_COMPRESS)
     unidat = rioxarray.open_rasterio(tift).rio.update_attrs({'units': tunits})
-    unidat.rio.to_raster(tift, compress='deflate')
+    unidat.rio.to_raster(
+        tift, compress=COG_COMPRESS,
+        driver='COG', dtype='uint16',
+        blocksize=blocksize,
+    )
 
 
 def _prep_rds(ncfiles: List[str], chunksize: int, date: datetime.date, ignore_cache: bool) -> xr.Dataset:
