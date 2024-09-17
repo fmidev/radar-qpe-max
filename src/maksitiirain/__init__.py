@@ -48,6 +48,7 @@ ATTRS = {ACC: {'units': 'mm',
          'time': {'long_name': 'end time of maximum precipitation accumulation period',
                   '_FillValue': UINT16_FILLVAL}}
 DEFAULT_CACHE_DIR = '/tmp/maksicache'
+SINGLE_SCAN_SUBDIR = 'scan-accums'
 COG_COMPRESS = 'LZW'
 
 logger = logging.getLogger(__name__)
@@ -153,7 +154,7 @@ def qpe_grid_caching(h5path: str, size: int, resolution: int,
     dset = 'dataset1' # lowest elevation
     corr = '_c' if 'C' in dbz_field else ''
     if isinstance(resultsdir, str):
-        tifdir = os.path.join(resultsdir, 'scan_accums')
+        tifdir = os.path.join(resultsdir, SINGLE_SCAN_SUBDIR)
         os.makedirs(tifdir, exist_ok=True)
     # read ts and NOD using h5py for increased performance
     with h5py.File(h5path, 'r') as h5f:
