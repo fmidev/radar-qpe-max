@@ -22,5 +22,5 @@ qpe --help
 
 Container example:
 ```shell
-podman run --rm -v=$HOME/data/polar/fivih/:/data:z -v=$HOME/results/sademaksit/:/output:z --tmpfs=/tmp quay.io/fmi/sademaksit:v0.11.0 winmax -i /data/{date}*.h5 -o /output -s 512 -w 1H 20220805
+podman run --rm -v=$HOME/data/polar/fivih/:/data:z -v=$HOME/results/radar-qpe-max/:/output:z --tmpfs=/tmp quay.io/fmi/sademaksit:v1.1.0 winmax -i /data/{date}*.h5 -o /output -s 512 -w 1H 20220805
 ```
