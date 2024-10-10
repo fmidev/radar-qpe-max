@@ -3,7 +3,7 @@ import datetime
 import pyart
 import numpy as np
 
-from maksitiirain import basic_gatefilter, ZH, tstep_from_fpaths
+from qpemax import basic_gatefilter, ZH, tstep_from_fpaths
 
 
 def test_basic_gatefilter():

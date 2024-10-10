@@ -1,11 +1,11 @@
-"""User interface"""
+"""command line interface"""
 import datetime
 import logging
 
 import click
 
-from maksitiirain import DATEFMT, DEFAULT_CACHE_DIR, two_day_glob, maxit, qpe_grid_caching, __version__
-from maksitiirain.logs import streamlogger_setup
+from qpemax import DATEFMT, DEFAULT_CACHE_DIR, two_day_glob, maxit, qpe_grid_caching, __version__
+from qpemax.logs import streamlogger_setup
 
 
 logger = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ def autoresolution(size):
 @click.version_option()
 def cli(verbose):
     """command line interface"""
-    parent_logger = logging.getLogger('maksitiirain')
+    parent_logger = logging.getLogger('qpemax')
     if verbose:
         log_level = logging.DEBUG
     else:

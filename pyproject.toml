@@ -3,7 +3,7 @@ requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
-name = "maksitiirain"
+name = "qpemax"
 description = 'QPE statistical indicators over moving temporal windows'
 readme = "README.md"
 requires-python = ">=3.8"
@@ -13,7 +13,7 @@ authors = [
   { name = "Jussi Tiira", email = "jussi.tiira@fmi.fi" },
 ]
 classifiers = [
-  "Development Status :: 4 - Beta",
+  "Development Status :: 5 - Production/Stable",
   "Programming Language :: Python",
   "Programming Language :: Python :: 3.8",
   "Programming Language :: Python :: 3.9",
@@ -31,17 +31,17 @@ dependencies = [
 dynamic = ["version"]
 
 [project.urls]
-Issues = "https://github.com/fmidev/sademaksit/issues"
-Source = "https://github.com/fmidev/sademaksit"
+Issues = "https://github.com/fmidev/radar-qpe-max/issues"
+Source = "https://github.com/fmidev/radar-qpe-max"
 
 [project.scripts]
-qpe = "maksitiirain.ui:cli"
+qpe = "qpemax.cli:cli"
 
 [tool.hatch.version]
 source = "vcs"
 
 [tool.hatch.build.hooks.vcs]
-version-file = "src/maksitiirain/_version.py"
+version-file = "src/qpemax/_version.py"
 
 [tool.hatch.envs.default]
 dependencies = [
@@ -49,7 +49,7 @@ dependencies = [
   "pytest-cov",
 ]
 [tool.hatch.envs.default.scripts]
-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=maksitiirain --cov=tests {args}"
+cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=qpemax --cov=tests {args}"
 no-cov = "cov --no-cov {args}"
 
 [[tool.hatch.envs.test.matrix]]

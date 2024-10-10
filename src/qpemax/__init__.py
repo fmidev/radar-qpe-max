@@ -25,7 +25,7 @@ from pyproj import Transformer, CRS
 from radproc.aliases.fmi import LWE
 from radproc.radar import z_r_qpe
 from radproc.tools import source2dict
-from maksitiirain._version import __version__
+from qpemax._version import __version__
 
 
 EPSG_TARGET = 3067
@@ -47,7 +47,7 @@ ATTRS = {ACC: {'units': 'mm',
                '_FillValue': UINT16_FILLVAL},
          'time': {'long_name': 'end time of maximum precipitation accumulation period',
                   '_FillValue': UINT16_FILLVAL}}
-DEFAULT_CACHE_DIR = '/tmp/maksicache'
+DEFAULT_CACHE_DIR = '/tmp/radar-qpe-max'
 SINGLE_SCAN_SUBDIR = 'scan-accums'
 COG_COMPRESS = 'LZW'
 

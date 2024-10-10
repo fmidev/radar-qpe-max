@@ -4,7 +4,7 @@ import pyart
 import numpy as np
 
 from radproc.radar import z_r_qpe, ZH
-import maksitiirain
+import qpemax
 
 
 datadir = os.path.expanduser('~/data/polar/filuo')
@@ -19,4 +19,4 @@ for field in radar.fields:
 radar.fields[ZH]['data'] = np.ones_like(radar.fields[ZH]['data'])*40
 z_r_qpe(radar, dbz_field=ZH)
 
-maksitiirain.save_precip_grid(radar, '/tmp/precip_grid.nc', tiffile='/tmp/precip_grid.tif', size=2048, resolution=250)
+qpemax.save_precip_grid(radar, '/tmp/precip_grid.nc', tiffile='/tmp/precip_grid.tif', size=2048, resolution=250)
