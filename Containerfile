@@ -1,8 +1,6 @@
-FROM python:3
+FROM python:3.12
 
 WORKDIR /usr/src/app
-
-RUN apt-get update && apt-get install -y libhdf5-dev libnetcdf-dev
 
 COPY . .
 
