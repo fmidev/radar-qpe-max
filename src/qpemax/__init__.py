@@ -233,11 +233,11 @@ def _write_tifs(dat: xr.Dataset, tifp: str, tift: str, blocksize: int = 512) -> 
     )
 
 
-def _prep_rds(ncfiles: List[str], chunksize: int, date: datetime.date, ignore_cache: bool) -> xr.Dataset:
+def combine_rds(ncfiles: List[str], chunksize: int, date: datetime.date, ignore_cache: bool) -> str:
     """Prepare precip rate dataset.
 
     Load cached precipitation rasters from netcdf files and write them to a
-    single chunked netcdf file. Return the dataset with time rounded to minutes."""
+    single chunked netcdf file."""
     ncpath = re.sub(r'\d{12}', date.strftime(DATEFMT), ncfiles[0])
     if not os.path.isfile(ncpath) or ignore_cache: # then create it
         logger.info('Loading cached individual precipitation rasters.')
@@ -250,7 +250,14 @@ def _prep_rds(ncfiles: List[str], chunksize: int, date: datetime.date, ignore_ca
                             'chunksizes': (1, chunksize, chunksize)}})
         logger.debug(f'Writing chunked dataset {ncpath}')
         rds.to_netcdf(ncpath, encoding=encoding, engine='h5netcdf')
-    # reopen the dataset in chunks
+    return ncpath
+
+
+def load_chunked_dataset(ncpath: str, chunksize: int) -> xr.Dataset:
+    """Load chunked dataset.
+
+    Return the dataset with time rounded to minutes."""
+    # open the dataset in chunks
     logger.info(f'Loading chunked dataset {ncpath}')
     rds = xr.open_dataset(ncpath, chunks={'x': chunksize, 'y': chunksize},
                           engine='h5netcdf')
@@ -298,7 +305,8 @@ def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
     globfmt = QPE_CACHE_FMT.format(ts='{date}????', nod=nod, size=size,
                                    resolution=resolution, corr=corr)
     ncfiles = two_day_glob(date, globfmt=os.path.join(cachedir, globfmt))
-    rds = _prep_rds(ncfiles, chunksize, date, ignore_cache)
+    ncfile = combine_rds(ncfiles, chunksize, date, ignore_cache)
+    rds = load_chunked_dataset(ncfile, chunksize)
     win_trim = win.replace(' ', '')
     winlow = win_trim.lower()
     # number of timesteps in window (e.g. 288 5min steps in a day)
