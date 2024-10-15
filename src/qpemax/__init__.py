@@ -184,7 +184,8 @@ def qpe_grid_caching(h5path: str, size: int, resolution: int,
     return nod
 
 
-def two_day_glob(date: datetime.date, globfmt: str = '{date}*.h5', **kws) -> List[str]:
+def two_day_glob(date: datetime.date,
+                 globfmt: str = '{date}*.h5', **kws) -> tuple[List[str], List[str]]:
     """List paths matching a glob pattern for given and previous date.
 
     The returned list includes paths matching the given date and one day before
@@ -198,8 +199,9 @@ def two_day_glob(date: datetime.date, globfmt: str = '{date}*.h5', **kws) -> Lis
                               date=d.strftime(DATEFMT))
     date0 = date - datetime.timedelta(days=1)
     ls = glob(fmtglob(date0), **kws)
+    ls0 = ls.copy()
     ls.extend(glob(fmtglob(date), **kws))
-    return sorted(ls)
+    return sorted(ls), ls0
 
 
 def _write_attrs(data: xr.Dataset, rdattrs: dict, win: str) -> xr.Dataset:
@@ -289,7 +291,7 @@ def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
           cachedir: str = DEFAULT_CACHE_DIR, size: int = 2048,
           resolution: int = 250, win: str = '1 D',
           chunksize: int = 256, ignore_cache: bool = False,
-          dbz_field: str = ZH) -> None:
+          dbz_field: str = ZH) -> List[str]:
     """Moving window maximum precipitation accumulation."""
     chunks = {'x': chunksize, 'y': chunksize}
     corr = '_c' if 'C' in dbz_field else '' # mark attenuation correction
@@ -305,7 +307,7 @@ def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
                                scans_per_hour=acc_scaling_guess)
     globfmt = QPE_CACHE_FMT.format(ts='{date}????', nod=nod, size=size,
                                    resolution=resolution, corr=corr)
-    ncfiles = two_day_glob(date, globfmt=os.path.join(cachedir, globfmt))
+    ncfiles, ncfiles_obsolete = two_day_glob(date, globfmt=os.path.join(cachedir, globfmt))
     ncfile = combine_rds(ncfiles, chunksize, date, ignore_cache)
     rds = load_chunked_dataset(ncfile, chunksize)
     win_trim = win.replace(' ', '')
@@ -331,3 +333,4 @@ def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
     tifp = os.path.join(resultsdir, f'{nod}{tstamp}max{winlow}{size}px{resolution}m{corr}.tif')
     tift = os.path.join(resultsdir, f'{nod}{tstamp}maxtime{winlow}{size}px{resolution}m{corr}.tif')
     _write_tifs(dat, tifp, tift)
+    return ncfiles_obsolete

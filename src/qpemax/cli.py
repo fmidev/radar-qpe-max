@@ -1,6 +1,7 @@
 """command line interface"""
 import datetime
 import logging
+import json
 
 import click
 
@@ -72,7 +73,8 @@ def grid(h5file, size, resolution, force, tif_dir, out_dir, dbz_field):
 @click.option('-r', '--resolution', metavar='METRE', help='spatial resolution in meters')
 @click.option('-w', '--window', metavar='WIN', help='length of the time window, e.g. 1D for 1 day', default='1 D')
 @click.option('-z', '--dbz-field', metavar='FIELD', help='use FIELD for DBZ', default='DBZH')
-def winmax(yyyymmdd, input_glob, output_dir, cache_dir, size, chunksize, resolution, dbz_field, window):
+@click.option('-l', '--list-obsolete', is_flag=True, help='json list of obsolete cache files')
+def winmax(yyyymmdd, input_glob, output_dir, cache_dir, size, chunksize, resolution, dbz_field, window, list_obsolete):
     """Maximum precipitation accumulation over moving temporal window.
 
     YYYYMMDD is the date over which the end of the time window moves."""
@@ -83,6 +85,17 @@ def winmax(yyyymmdd, input_glob, output_dir, cache_dir, size, chunksize, resolut
     if resolution is None:
         resolution = autoresolution(size)
     date = datetime.datetime.strptime(yyyymmdd, DATEFMT)
-    h5paths = two_day_glob(date, globfmt=input_glob)
-    maxit(date, h5paths, output_dir, cachedir=cache_dir, size=size, chunksize=chunksize,
-          resolution=resolution, dbz_field=dbz_field, win=window)
+    h5paths, _ = two_day_glob(date, globfmt=input_glob)
+    nc_obsolete = maxit(
+        date,
+        h5paths,
+        output_dir,
+        cachedir=cache_dir,
+        size=size,
+        chunksize=chunksize,
+        resolution=resolution,
+        dbz_field=dbz_field,
+        win=window
+    )
+    if list_obsolete:
+        print(json.dumps(nc_obsolete))
