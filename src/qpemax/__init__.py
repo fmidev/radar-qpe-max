@@ -39,6 +39,7 @@ LWE_SCALE_FACTOR = 0.01
 DATEFMT = '%Y%m%d'
 UINT16_FILLVAL = np.iinfo(np.uint16).max
 DEFAULT_ENCODING = {LWE: {'zlib': True,
+                          'complevel': 9,
                           '_FillValue': UINT16_FILLVAL,
                           'dtype': 'u2',
                           'scale_factor': LWE_SCALE_FACTOR}}
