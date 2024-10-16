@@ -5,6 +5,7 @@
 # builtin
 import os
 import re
+import time
 import logging
 import datetime
 import warnings
@@ -127,7 +128,19 @@ def save_precip_grid(radar: pyart.core.Radar, cachefile: str,
     # TODO: retain existing history if any
     rda.attrs.update({'history': __version__})
     # netcdf4 engine causes HDF error on some machines
-    rda.to_netcdf(cachefile, encoding=DEFAULT_ENCODING, engine='h5netcdf')
+    max_retries = 3
+    retries = 0
+    while retries < max_retries:
+        try:
+            rda.to_netcdf(cachefile, encoding=DEFAULT_ENCODING, engine='h5netcdf')
+        except BlockingIOError as e:
+            logger.error(f'Error writing {cachefile}: {e}')
+            if e.errno == 11: # unable to lock file
+                retries += 1
+                logger.error('Retrying after delay.')
+                time.sleep(1)
+            else:
+                raise
     if isinstance(tiffile, str):
         acc = (rda.isel(time=0)[LWE]/scans_per_hour).rename(ACC)
         acc.attrs.update(ATTRS[ACC])
