@@ -137,8 +137,11 @@ def save_precip_grid(radar: pyart.core.Radar, cachefile: str,
             logger.error(f'Error writing {cachefile}: {e}')
             if e.errno == 11: # unable to lock file
                 retries += 1
-                logger.error('Retrying after delay.')
                 time.sleep(1)
+                if os.path.isfile(cachefile):
+                    logger.warning('File was created by another process.')
+                    break
+                logger.error('Retrying after delay.')
             else:
                 raise
     if isinstance(tiffile, str):
