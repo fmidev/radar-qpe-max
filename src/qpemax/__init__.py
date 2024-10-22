@@ -121,6 +121,7 @@ def save_precip_grid(radar: pyart.core.Radar, cachefile: str,
     rda = rds[LWE].fillna(0)
     rda.rio.write_crs(EPSG_TARGET, inplace=True)
     rda = rda.to_dataset()
+    rda['time'] = rda.time.dt.round('min')  # round to minutes
     try:
         rda.attrs.update(source2dict(radar.metadata['source']))
     except KeyError:
