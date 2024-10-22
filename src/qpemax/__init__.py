@@ -134,6 +134,7 @@ def save_precip_grid(radar: pyart.core.Radar, cachefile: str,
     while retries < max_retries:
         try:
             rda.to_netcdf(cachefile, encoding=DEFAULT_ENCODING, engine='h5netcdf')
+            break
         except BlockingIOError as e:
             logger.error(f'Error writing {cachefile}: {e}')
             if e.errno == 11: # unable to lock file
@@ -145,6 +146,9 @@ def save_precip_grid(radar: pyart.core.Radar, cachefile: str,
                 logger.error('Retrying after delay.')
             else:
                 raise
+        except Exception as e:
+            logger.error(f'Error writing {cachefile}: {e}')
+            raise
     if isinstance(tiffile, str):
         acc = (rda.isel(time=0)[LWE]/scans_per_hour).rename(ACC)
         acc.attrs.update(ATTRS[ACC])
@@ -184,9 +188,9 @@ def qpe_grid_caching(h5path: str, size: int, resolution: int,
                                       resolution=resolution, corr=corr)
     cachefile = os.path.join(cachedir, cachefname)
     if os.path.isfile(cachefile) and not ignore_cache:
-        logger.debug(f'Cache file {cachefile} exists.')
+        logger.info(f'Cache file {cachefile} exists.')
         return nod
-    logger.debug(f'Creating cache file {cachefile}')
+    logger.info(f'Creating cache file {cachefile}')
     radar = pyart.aux_io.read_odim_h5(h5path, include_datasets=[dset],
                                       file_field_names=True)
     if isinstance(resultsdir, str):
