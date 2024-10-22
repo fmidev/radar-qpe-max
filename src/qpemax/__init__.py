@@ -42,8 +42,10 @@ UINT16_FILLVAL = np.iinfo(np.uint16).max
 DEFAULT_ENCODING = {LWE: {'zlib': True,
                           'complevel': 9,
                           '_FillValue': UINT16_FILLVAL,
-                          'dtype': 'u2',
-                          'scale_factor': LWE_SCALE_FACTOR}}
+                          'dtype': 'uint16',
+                          'scale_factor': LWE_SCALE_FACTOR},
+                    'time': {'dtype': 'uint16'}
+                    }
 ATTRS = {ACC: {'units': 'mm',
                'standard_name': 'lwe_thickness_of_precipitation_amount',
                '_FillValue': UINT16_FILLVAL},
@@ -153,7 +155,7 @@ def save_precip_grid(radar: pyart.core.Radar, cachefile: str,
         acc = (rda.isel(time=0)[LWE]/scans_per_hour).rename(ACC)
         acc.attrs.update(ATTRS[ACC])
         acc.rio.update_encoding({'scale_factor': LWE_SCALE_FACTOR}, inplace=True)
-        logger.debug(f'Writing geotiff {tiffile}')
+        logger.info(f'Writing geotiff {tiffile}')
         acc.rio.to_raster(
             tiffile, driver='COG',
             dtype='uint16', compress=COG_COMPRESS,
@@ -270,9 +272,8 @@ def combine_rds(ncfiles: List[str], chunksize: int, date: datetime.date, ignore_
                                 engine='h5netcdf', phony_dims='sort')
         # write dataset chunked by horizontal dimensions
         encoding = DEFAULT_ENCODING.copy()
-        encoding.update({LWE: {'zlib': False,
-                            'chunksizes': (1, chunksize, chunksize)}})
-        logger.debug(f'Writing chunked dataset {ncpath}')
+        encoding[LWE]['chunksizes'] = (1, chunksize, chunksize)
+        logger.info(f'Writing chunked dataset {ncpath}')
         rds.to_netcdf(ncpath, encoding=encoding, engine='h5netcdf')
     return ncpath
 
