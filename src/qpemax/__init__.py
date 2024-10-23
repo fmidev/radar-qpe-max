@@ -55,7 +55,7 @@ DEFAULT_CACHE_DIR = '/tmp/radar-qpe-max'
 SINGLE_SCAN_SUBDIR = 'scan-accums'
 COG_COMPRESS = 'LZW'
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('airflow.task')
 
 
 def basic_gatefilter(radar: pyart.core.Radar, field: str = ZH) -> pyart.filters.GateFilter:

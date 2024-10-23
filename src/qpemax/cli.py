@@ -9,7 +9,7 @@ from qpemax import DATEFMT, DEFAULT_CACHE_DIR, two_day_glob, maxit, qpe_grid_cac
 from qpemax.logs import streamlogger_setup
 
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('airflow.task')
 
 # multi-line help strings
 CHUNKSIZE_HELP = "Horizontal chunksize PX*PX. Larger chunksize speeds up the processing but " \
@@ -32,7 +32,7 @@ def autoresolution(size):
 @click.version_option()
 def cli(verbose):
     """command line interface"""
-    parent_logger = logging.getLogger('qpemax')
+    parent_logger = logging.getLogger('airflow.task')
     if verbose:
         log_level = logging.DEBUG
     else:

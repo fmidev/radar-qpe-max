@@ -6,7 +6,7 @@ from qpemax import maxit, two_day_glob
 from qpemax.logs import streamlogger_setup
 
 
-logger = logging.getLogger('qpemax')
+logger = logging.getLogger('airflow.task')
 
 
 if __name__ == '__main__':
@@ -22,5 +22,5 @@ if __name__ == '__main__':
     h5paths, _ = two_day_glob(date, globfmt=os.path.join(datadir, '{date}*.h5'))
     cachedir = os.path.expanduser('~/.cache/radar-qpe-max')
     # size 1024 or 2048 can still be run on a laptop with chunksize 256
-    maxit(date, h5paths, resultsdir, size=512, resolution=1000, chunksize=256,
+    maxit(date, h5paths, resultsdir, size=256, resolution=1000, chunksize=256,
           ignore_cache=False, cachedir=cachedir)
