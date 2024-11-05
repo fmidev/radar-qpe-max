@@ -44,7 +44,7 @@ DEFAULT_ENCODING = {LWE: {'zlib': True,
                           '_FillValue': UINT16_FILLVAL,
                           'dtype': 'uint16',
                           'scale_factor': LWE_SCALE_FACTOR},
-                    'time': {'dtype': 'uint16'}
+                    'time': {'dtype': 'int32',}
                     }
 ATTRS = {ACC: {'units': 'mm',
                'standard_name': 'lwe_thickness_of_precipitation_amount',
