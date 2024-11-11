@@ -58,6 +58,16 @@ COG_COMPRESS = 'LZW'
 logger = logging.getLogger('airflow.task')
 
 
+def read_odim_h5(h5path: str, **kws) -> pyart.core.Radar:
+    """Read radar data from ODIM H5 file."""
+    radar = pyart.aux_io.read_odim_h5(h5path, **kws)
+    # workaround for pyart bug
+    radar.altitude['data'] = radar.altitude['data'].flatten()
+    radar.latitude['data'] = radar.latitude['data'].flatten()
+    radar.longitude['data'] = radar.longitude['data'].flatten()
+    return radar
+
+
 def basic_gatefilter(radar: pyart.core.Radar, field: str = ZH) -> pyart.filters.GateFilter:
     """basic gatefilter based on examples in pyart documentation"""
     gatefilter = pyart.filters.GateFilter(radar)
@@ -193,8 +203,7 @@ def qpe_grid_caching(h5path: str, size: int, resolution: int,
         logger.info(f'Cache file {cachefile} exists.')
         return nod
     logger.info(f'Creating cache file {cachefile}')
-    radar = pyart.aux_io.read_odim_h5(h5path, include_datasets=[dset],
-                                      file_field_names=True)
+    radar = read_odim_h5(h5path, include_datasets=[dset], file_field_names=True)
     if isinstance(resultsdir, str):
         tifname = QPE_TIF_FMT.format(ts=ts, nod=nod, size=size,
                                      resolution=resolution, corr=corr)

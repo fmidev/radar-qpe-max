@@ -11,7 +11,7 @@ datadir = os.path.expanduser('~/data/polar/filuo')
 fpath = os.path.join(datadir, '202405281100_radar.polar.filuo.h5')
 
 # read in the radar data
-radar = pyart.aux_io.read_odim_h5(fpath, include_datasets=['dataset1'],
+radar = qpemax.read_odim_h5(fpath, include_datasets=['dataset1'],
                                   file_field_names=True)
 
 for field in radar.fields:
