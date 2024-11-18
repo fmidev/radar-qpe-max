@@ -181,7 +181,7 @@ def sweep_start_datetime(hfile: h5py.File, dset: str) -> datetime.datetime:
 
 
 def qpe_grid_caching(h5path: str, size: int, resolution: int,
-                     ignore_cache: bool, resultsdir: Optional[str] = None,
+                     ignore_cache: bool = False, resultsdir: Optional[str] = None,
                      cachedir: str = DEFAULT_CACHE_DIR, dbz_field: str = ZH,
                      **kws) -> str:
     """Create precipitation grid cache file and optionally geotiff."""
