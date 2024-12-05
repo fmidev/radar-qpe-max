@@ -215,8 +215,7 @@ def qpe_grid_caching(
     with h5py.File(h5path, 'r') as h5f:
         t = sweep_start_datetime(h5f, f'/{dset}')
         ts = t.strftime('%Y%m%d%H%M')
-        source = _to_str(h5f['/what'].attrs['source'])
-        nod = source.split('NOD:')[1].split(',')[0]
+        nod = get_nod(h5f)
     cachefname = QPE_CACHE_FMT.format(ts=ts, nod=nod, size=size,
                                       resolution=resolution, corr=corr)
     cachefile = os.path.join(cachedir, cachefname)
@@ -323,7 +322,7 @@ def combine_rds(
     return ncpath
 
 
-def load_chunked_dataset(ncpath: str, chunksize: int) -> xr.Dataset:
+def load_chunked_dataset(ncpath: str) -> xr.Dataset:
     """Load chunked dataset.
 
     Return the dataset with time rounded to minutes."""
@@ -355,21 +354,23 @@ def tstep_from_fpaths(fpaths: List[str]) -> datetime.datetime:
     return tstep
 
 
-def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
-          cachedir: str = DEFAULT_CACHE_DIR, size: int = 2048,
-          resolution: int = 250, win: str = '1 D',
-          chunksize: int = DEFAULT_CHUNKSIZE, ignore_cache: bool = False,
-          dbz_field: str = ZH) -> List[str]:
-    """Moving window maximum precipitation accumulation."""
-    chunks = {'x': chunksize, 'y': chunksize}
-    corr = '_c' if 'C' in dbz_field else '' # mark attenuation correction
-    os.makedirs(cachedir, exist_ok=True)
-    # the guess is used only for geotiff accumulation scaling
+def get_nod(h5file: h5py.File) -> str:
+    """Get NOD from source metadata."""
+    source = _to_str(h5file['/what'].attrs['source'])
+    return source.split('NOD:')[1].split(',')[0]
+
+
+def generate_individual_rasters(
+        h5paths: List[str], resultsdir: str, cachedir: str = DEFAULT_CACHE_DIR,
+        size: int = DEFAULT_XY_SIZE,
+        resolution: int = DEFAULT_RESOLUTION,
+        chunksize: int = DEFAULT_CHUNKSIZE,
+        ignore_cache: bool = False, dbz_field: str = ZH) -> None:
+    """Generate individual precipitation rasters and return the nod."""
     tstep_guess = tstep_from_fpaths(h5paths)
-    acc_scaling_guess = datetime.timedelta(hours=1)/tstep_guess
-    logger.info('Updating precipitation raster cache.')
+    acc_scaling_guess = datetime.timedelta(hours=1) / tstep_guess
     for fpath in h5paths:
-        nod = qpe_grid_caching(
+        qpe_grid_caching(
             fpath, size, resolution, ignore_cache,
             resultsdir=resultsdir,
             cachedir=cachedir,
@@ -377,6 +378,16 @@ def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
             scans_per_hour=acc_scaling_guess,
             chunksize=chunksize,
         )
+
+
+def combine_rasters(
+        date: datetime.date, nod: str, cachedir: str = DEFAULT_CACHE_DIR,
+        size: int = DEFAULT_XY_SIZE, resolution: int = DEFAULT_RESOLUTION,
+        chunksize: int = DEFAULT_CHUNKSIZE,
+        ignore_cache: bool = False,
+        dbz_field: str = ZH) -> tuple[str, List[str]]:
+    """Combine individual rasters into a single chunked netcdf file."""
+    corr = '_c' if 'C' in dbz_field else '' # mark attenuation correction
     globfmt = QPE_CACHE_FMT.format(
         ts='{date}????',
         nod=nod,
@@ -387,7 +398,14 @@ def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
     globfmt = os.path.join(cachedir, globfmt)
     ncfiles, ncfiles_obsolete = two_day_glob(date, globfmt=globfmt)
     ncfile = combine_rds(ncfiles, chunksize, date, ignore_cache)
-    rds = load_chunked_dataset(ncfile, chunksize)
+    return ncfile, ncfiles_obsolete
+
+
+def maxit(date: datetime.date, ncfile: str,
+          win: str = '1 D', chunksize: int = DEFAULT_CHUNKSIZE) -> xr.Dataset:
+    """Moving window maximum precipitation accumulation."""
+    chunks = {'x': chunksize, 'y': chunksize}
+    rds = load_chunked_dataset(ncfile)
     win_trim = win.replace(' ', '')
     winlow = win_trim.lower()
     # number of timesteps in window (e.g. 288 5min steps in a day)
@@ -396,11 +414,11 @@ def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
     tind = rds.indexes['time']
     # timestep length as timedelta
     tdelta = pd.to_timedelta(tind.freq) or pd.Series(tind).diff().median()
-    tstep_last = pd.to_datetime(date+datetime.timedelta(days=1))-tdelta
-    tstep_pre = pd.to_datetime(date)-dwin+tdelta
+    tstep_last = pd.to_datetime(date + datetime.timedelta(days=1)) - tdelta
+    tstep_pre = pd.to_datetime(date) - dwin + tdelta
     rollsel = rds.sel(time=slice(tstep_pre, tstep_last))
     # The data is still precip rate, so scale to mm
-    acc_scaling = datetime.timedelta(hours=1)/tdelta # 12 for 5min steps
+    acc_scaling = datetime.timedelta(hours=1) / tdelta # 12 for 5min steps
     accums = (
         rollsel[LWE].rolling({'time': iwin}).sum() / acc_scaling
     ).to_dataset()
@@ -408,13 +426,18 @@ def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
     dat = accums.max('time').rio.write_crs(EPSG_TARGET)
     dat['time'] = accums[ACC].idxmax(dim='time', keep_attrs=True).chunk(chunks)
     dat = dat.compute()
-    tstamp = accums.time[-1].dt.strftime(DATEFMT).item()
-    dat = _write_attrs(dat, rds.attrs, win)
+    return _write_attrs(dat, rds.attrs, win)
+
+
+def write_max_tifs(
+        dat: xr.Dataset, resultsdir: str, nod: str, win: str, corr: str = '',
+        size: int = DEFAULT_XY_SIZE,
+        resolution: int = DEFAULT_RESOLUTION) -> None:
+    tstamp = dat.time[-1].dt.strftime(DATEFMT).item()
     tifp = os.path.join(
         resultsdir,
-        f'{nod}{tstamp}max{winlow}{size}px{resolution}m{corr}.tif')
+        f'{nod}{tstamp}max{win}{size}px{resolution}m{corr}.tif')
     tift = os.path.join(
         resultsdir,
-        f'{nod}{tstamp}maxtime{winlow}{size}px{resolution}m{corr}.tif')
+        f'{nod}{tstamp}maxtime{win}{size}px{resolution}m{corr}.tif')
     _write_tifs(dat, tifp, tift)
-    return ncfiles_obsolete
