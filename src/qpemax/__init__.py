@@ -32,25 +32,37 @@ from qpemax._version import __version__
 EPSG_TARGET = 3067
 ZH = 'DBZH'
 ACC = 'lwe_accum'
-qpefmt = '{ts}{nod}{size}px{resolution}m{corr}'
+_qpefmt = '{ts}{nod}{size}px{resolution}m{corr}'
 DATEGLOB = '????????????'
-QPE_CACHE_FMT = qpefmt + '.nc'
-QPE_TIF_FMT = qpefmt + '.tif'
+QPE_CACHE_FMT = _qpefmt + '.nc'
+QPE_TIF_FMT = _qpefmt + '.tif'
 LWE_SCALE_FACTOR = 0.01
 DATEFMT = '%Y%m%d'
 UINT16_FILLVAL = np.iinfo(np.uint16).max
-DEFAULT_ENCODING = {LWE: {'zlib': True,
-                          'complevel': 9,
-                          '_FillValue': UINT16_FILLVAL,
-                          'dtype': 'uint16',
-                          'scale_factor': LWE_SCALE_FACTOR},
-                    'time': {'dtype': 'int32',}
-                    }
-ATTRS = {ACC: {'units': 'mm',
-               'standard_name': 'lwe_thickness_of_precipitation_amount',
-               '_FillValue': UINT16_FILLVAL},
-         'time': {'long_name': 'end time of maximum precipitation accumulation period',
-                  '_FillValue': UINT16_FILLVAL}}
+DEFAULT_ENCODING = {
+    LWE: {
+        'zlib': True,
+        'complevel': 9,
+        '_FillValue': UINT16_FILLVAL,
+        'dtype': 'uint16',
+        'scale_factor': LWE_SCALE_FACTOR
+    },
+    'time': {'dtype': 'int32',}
+}
+ATTRS = {
+    ACC: {
+        'units': 'mm',
+        'standard_name': 'lwe_thickness_of_precipitation_amount',
+        '_FillValue': UINT16_FILLVAL
+    },
+    'time': {
+        'long_name': 'end time of maximum precipitation accumulation period',
+        '_FillValue': UINT16_FILLVAL
+    }
+}
+DEFAULT_CHUNKSIZE = 256
+DEFAULT_RESOLUTION = 250
+DEFAULT_XY_SIZE = 2048
 DEFAULT_CACHE_DIR = '/tmp/radar-qpe-max'
 SINGLE_SCAN_SUBDIR = 'scan-accums'
 COG_COMPRESS = 'LZW'
@@ -68,7 +80,9 @@ def read_odim_h5(h5path: str, **kws) -> pyart.core.Radar:
     return radar
 
 
-def basic_gatefilter(radar: pyart.core.Radar, field: str = ZH) -> pyart.filters.GateFilter:
+def basic_gatefilter(
+        radar: pyart.core.Radar,
+        field: str = ZH) -> pyart.filters.GateFilter:
     """basic gatefilter based on examples in pyart documentation"""
     gatefilter = pyart.filters.GateFilter(radar)
     gatefilter.exclude_transition()
@@ -76,15 +90,16 @@ def basic_gatefilter(radar: pyart.core.Radar, field: str = ZH) -> pyart.filters.
     return gatefilter
 
 
-def create_grid(radar: pyart.core.Radar, size: int = 2048,
-                resolution: int = 250) -> pyart.core.Grid:
+def create_grid(
+        radar: pyart.core.Radar, size: int = DEFAULT_XY_SIZE,
+        resolution: int = DEFAULT_RESOLUTION) -> pyart.core.Grid:
     """
     Create a grid from radar data.
 
     Args:
         radar (pyart.core.Radar): The radar object containing the data.
-        size (int, optional): The size of the grid. Defaults to 2048.
-        resolution (int, optional): The resolution of the grid. Defaults to 250.
+        size (int, optional): The size of the grid.
+        resolution (int, optional): The resolution of the grid.
 
     Returns:
         pyart.core.Grid: The grid object containing the gridded data.
@@ -105,28 +120,30 @@ def create_grid(radar: pyart.core.Radar, size: int = 2048,
     grid_limits = ((0, 10000), # upper limit does not seem to matter
                    (radar_x-r_m, radar_x+r_m),
                    (radar_y-r_m, radar_y+r_m))
-    grid = pyart.map.grid_from_radars(radar, gatefilters=gf,
-                                      gridding_algo='map_gates_to_grid',
-                                      grid_shape=grid_shape,
-                                      grid_limits=grid_limits, fields=[LWE],
-                                      grid_projection=projd_target,
-                                      grid_origin=(0, 0),
-                                      grid_origin_alt=radar_alt,
-                                      h_factor=(50, h_factor_xy, h_factor_xy),
-                                      min_radius=330,
-                                      roi_func='dist_beam')
+    grid = pyart.map.grid_from_radars(
+        radar, gatefilters=gf,
+        gridding_algo='map_gates_to_grid',
+        grid_shape=grid_shape,
+        grid_limits=grid_limits, fields=[LWE],
+        grid_projection=projd_target,
+        grid_origin=(0, 0),
+        grid_origin_alt=radar_alt,
+        h_factor=(50, h_factor_xy, h_factor_xy),
+        min_radius=330,
+        roi_func='dist_beam')
     grid.x['data'] = grid.x['data'].flatten()
     grid.y['data'] = grid.y['data'].flatten()
     return grid
 
 
-def save_precip_grid(radar: pyart.core.Radar, cachefile: str,
-                     tiffile: Optional[str] = None, size: int = 2048,
-                     resolution: int = 250, scans_per_hour: int = 12,
-                     blocksize: int = 512) -> None:
+def save_precip_grid(
+        radar: pyart.core.Radar, cachefile: str,
+        tiffile: Optional[str] = None, size: int = DEFAULT_XY_SIZE,
+        resolution: int = DEFAULT_RESOLUTION, scans_per_hour: int = 12,
+        blocksize: int = 512, chunksize: int = DEFAULT_CHUNKSIZE) -> None:
     """Save precipitation products from Radar objects to files.
 
-    Precipitation rate is saved to netcdf `cachefile`, and optionally 5-minute
+    Precipitation rate is saved to netcdf `cachefile`, and optionally per scan
     accumulation to `tiffile`."""
     grid = create_grid(radar, size=size, resolution=resolution)
     rds = grid.to_xarray().isel(z=0).reset_coords(drop=True)
@@ -145,7 +162,9 @@ def save_precip_grid(radar: pyart.core.Radar, cachefile: str,
     retries = 0
     while retries < max_retries:
         try:
-            rda.to_netcdf(cachefile, encoding=DEFAULT_ENCODING, engine='h5netcdf')
+            encoding = DEFAULT_ENCODING.copy()
+            encoding[LWE]['chunksizes'] = (1, chunksize, chunksize)
+            rda.to_netcdf(cachefile, encoding=encoding, engine='h5netcdf')
             break
         except BlockingIOError as e:
             logger.error(f'Error writing {cachefile}: {e}')
@@ -164,7 +183,8 @@ def save_precip_grid(radar: pyart.core.Radar, cachefile: str,
     if isinstance(tiffile, str):
         acc = (rda.isel(time=0)[LWE]/scans_per_hour).rename(ACC)
         acc.attrs.update(ATTRS[ACC])
-        acc.rio.update_encoding({'scale_factor': LWE_SCALE_FACTOR}, inplace=True)
+        acc.rio.update_encoding(
+            {'scale_factor': LWE_SCALE_FACTOR}, inplace=True)
         logger.info(f'Writing geotiff {tiffile}')
         acc.rio.to_raster(
             tiffile, driver='COG',
@@ -173,17 +193,18 @@ def save_precip_grid(radar: pyart.core.Radar, cachefile: str,
         )
 
 
-def sweep_start_datetime(hfile: h5py.File, dset: str) -> datetime.datetime:
+def sweep_start_datetime(
+        hfile: h5py.File, dset: str) -> datetime.datetime:
     """Get the starting time of the sweep defined by the dataset."""
     dset_what = hfile[dset]["what"].attrs
     start_str = _to_str(dset_what["startdate"] + dset_what["starttime"])
     return datetime.datetime.strptime(start_str, "%Y%m%d%H%M%S")
 
 
-def qpe_grid_caching(h5path: str, size: int, resolution: int,
-                     ignore_cache: bool = False, resultsdir: Optional[str] = None,
-                     cachedir: str = DEFAULT_CACHE_DIR, dbz_field: str = ZH,
-                     **kws) -> str:
+def qpe_grid_caching(
+        h5path: str, size: int, resolution: int,
+        ignore_cache: bool = False, resultsdir: Optional[str] = None,
+        cachedir: str = DEFAULT_CACHE_DIR, dbz_field: str = ZH, **kws) -> str:
     """Create precipitation grid cache file and optionally geotiff."""
     dset = 'dataset1' # lowest elevation
     corr = '_c' if 'C' in dbz_field else ''
@@ -203,7 +224,8 @@ def qpe_grid_caching(h5path: str, size: int, resolution: int,
         logger.info(f'Cache file {cachefile} exists.')
         return nod
     logger.info(f'Creating cache file {cachefile}')
-    radar = read_odim_h5(h5path, include_datasets=[dset], file_field_names=True)
+    radar = read_odim_h5(
+        h5path, include_datasets=[dset], file_field_names=True)
     if isinstance(resultsdir, str):
         tifname = QPE_TIF_FMT.format(ts=ts, nod=nod, size=size,
                                      resolution=resolution, corr=corr)
@@ -216,8 +238,10 @@ def qpe_grid_caching(h5path: str, size: int, resolution: int,
     return nod
 
 
-def two_day_glob(date: datetime.date,
-                 globfmt: str = '{date}*.h5', **kws) -> tuple[List[str], List[str]]:
+def two_day_glob(
+        date: datetime.date,
+        globfmt: str = '{date}*.h5',
+        **kws) -> tuple[List[str], List[str]]:
     """List paths matching a glob pattern for given and previous date.
 
     The returned list includes paths matching the given date and one day before
@@ -249,7 +273,8 @@ def _write_attrs(data: xr.Dataset, rdattrs: dict, win: str) -> xr.Dataset:
     return dat.rio.write_coordinate_system()
 
 
-def _write_tifs(dat: xr.Dataset, tifp: str, tift: str, blocksize: int = 512) -> None:
+def _write_tifs(
+        dat: xr.Dataset, tifp: str, tift: str, blocksize: int = 512) -> None:
     """Write main geotiff products to files."""
     tunits = 'minutes since ' + str(dat.time.min().item())
     enc = {'time': {'units': tunits, 'calendar': 'proleptic_gregorian'}}
@@ -268,7 +293,11 @@ def _write_tifs(dat: xr.Dataset, tifp: str, tift: str, blocksize: int = 512) -> 
     )
 
 
-def combine_rds(ncfiles: List[str], chunksize: int, date: datetime.date, ignore_cache: bool) -> str:
+def combine_rds(
+        ncfiles: List[str],
+        chunksize: int,
+        date: datetime.date,
+        ignore_cache: bool) -> str:
     """Prepare precip rate dataset.
 
     Load cached precipitation rasters from netcdf files and write them to a
@@ -277,11 +306,18 @@ def combine_rds(ncfiles: List[str], chunksize: int, date: datetime.date, ignore_
     if not os.path.isfile(ncpath) or ignore_cache: # then create it
         logger.info('Loading cached individual precipitation rasters.')
         # combine all files into a single dataset
-        rds = xr.open_mfdataset(ncfiles, data_vars='minimal',
-                                engine='h5netcdf', phony_dims='sort')
-        # write dataset chunked by horizontal dimensions
+        chunks = {'x': chunksize, 'y': chunksize}
+        rds = xr.open_mfdataset(
+            ncfiles,
+            data_vars='minimal',
+            parallel=True,
+            engine='h5netcdf',
+            phony_dims='sort',
+            chunks=chunks,
+        )
+        # at least one million elements per chunk is recommended
         encoding = DEFAULT_ENCODING.copy()
-        encoding[LWE]['chunksizes'] = (1, chunksize, chunksize)
+        encoding[LWE]['chunksizes'] = (24, chunksize, chunksize)
         logger.info(f'Writing chunked dataset {ncpath}')
         rds.to_netcdf(ncpath, encoding=encoding, engine='h5netcdf')
     return ncpath
@@ -293,7 +329,7 @@ def load_chunked_dataset(ncpath: str, chunksize: int) -> xr.Dataset:
     Return the dataset with time rounded to minutes."""
     # open the dataset in chunks
     logger.info(f'Loading chunked dataset {ncpath}')
-    rds = xr.open_dataset(ncpath, chunks={'x': chunksize, 'y': chunksize},
+    rds = xr.open_dataset(ncpath, chunks={},
                           engine='h5netcdf')
     logger.info('Rasters loaded.')
     rds['time'] = rds.indexes['time'].round('min')
@@ -311,7 +347,8 @@ def tstep_from_fpaths(fpaths: List[str]) -> datetime.datetime:
     tstep2 = pd.to_datetime(re.search(r'\d{12}', fpaths[-1]).group())
     tstep2 -= pd.to_datetime(re.search(r'\d{12}', fpaths[-2]).group())
     if tstep != tstep2:
-        logger.error('Inconsistent timestep lengths in file paths. Assuming 5min.')
+        logger.error(
+            'Inconsistent timestep lengths in file paths. Assuming 5min.')
         return tstep_default
     if tstep != tstep_default:
         logger.warning(f'Unusual timestep length {tstep}.')
@@ -321,7 +358,7 @@ def tstep_from_fpaths(fpaths: List[str]) -> datetime.datetime:
 def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
           cachedir: str = DEFAULT_CACHE_DIR, size: int = 2048,
           resolution: int = 250, win: str = '1 D',
-          chunksize: int = 256, ignore_cache: bool = False,
+          chunksize: int = DEFAULT_CHUNKSIZE, ignore_cache: bool = False,
           dbz_field: str = ZH) -> List[str]:
     """Moving window maximum precipitation accumulation."""
     chunks = {'x': chunksize, 'y': chunksize}
@@ -332,13 +369,23 @@ def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
     acc_scaling_guess = datetime.timedelta(hours=1)/tstep_guess
     logger.info('Updating precipitation raster cache.')
     for fpath in h5paths:
-        nod = qpe_grid_caching(fpath, size, resolution, ignore_cache,
-                               resultsdir=resultsdir,
-                               cachedir=cachedir, dbz_field=dbz_field,
-                               scans_per_hour=acc_scaling_guess)
-    globfmt = QPE_CACHE_FMT.format(ts='{date}????', nod=nod, size=size,
-                                   resolution=resolution, corr=corr)
-    ncfiles, ncfiles_obsolete = two_day_glob(date, globfmt=os.path.join(cachedir, globfmt))
+        nod = qpe_grid_caching(
+            fpath, size, resolution, ignore_cache,
+            resultsdir=resultsdir,
+            cachedir=cachedir,
+            dbz_field=dbz_field,
+            scans_per_hour=acc_scaling_guess,
+            chunksize=chunksize,
+        )
+    globfmt = QPE_CACHE_FMT.format(
+        ts='{date}????',
+        nod=nod,
+        size=size,
+        resolution=resolution,
+        corr=corr,
+    )
+    globfmt = os.path.join(cachedir, globfmt)
+    ncfiles, ncfiles_obsolete = two_day_glob(date, globfmt=globfmt)
     ncfile = combine_rds(ncfiles, chunksize, date, ignore_cache)
     rds = load_chunked_dataset(ncfile, chunksize)
     win_trim = win.replace(' ', '')
@@ -354,14 +401,20 @@ def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
     rollsel = rds.sel(time=slice(tstep_pre, tstep_last))
     # The data is still precip rate, so scale to mm
     acc_scaling = datetime.timedelta(hours=1)/tdelta # 12 for 5min steps
-    accums = (rollsel[LWE].rolling({'time': iwin}).sum()/acc_scaling).to_dataset()
+    accums = (
+        rollsel[LWE].rolling({'time': iwin}).sum() / acc_scaling
+    ).to_dataset()
     accums = accums.rename({LWE: ACC})
     dat = accums.max('time').rio.write_crs(EPSG_TARGET)
     dat['time'] = accums[ACC].idxmax(dim='time', keep_attrs=True).chunk(chunks)
     dat = dat.compute()
     tstamp = accums.time[-1].dt.strftime(DATEFMT).item()
     dat = _write_attrs(dat, rds.attrs, win)
-    tifp = os.path.join(resultsdir, f'{nod}{tstamp}max{winlow}{size}px{resolution}m{corr}.tif')
-    tift = os.path.join(resultsdir, f'{nod}{tstamp}maxtime{winlow}{size}px{resolution}m{corr}.tif')
+    tifp = os.path.join(
+        resultsdir,
+        f'{nod}{tstamp}max{winlow}{size}px{resolution}m{corr}.tif')
+    tift = os.path.join(
+        resultsdir,
+        f'{nod}{tstamp}maxtime{winlow}{size}px{resolution}m{corr}.tif')
     _write_tifs(dat, tifp, tift)
     return ncfiles_obsolete
