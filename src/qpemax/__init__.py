@@ -27,6 +27,7 @@ from radproc.aliases.fmi import LWE
 from radproc.radar import z_r_qpe
 from radproc.tools import source2dict
 from qpemax._version import __version__
+from qpemax.callbacks import ProgressLogging
 
 
 EPSG_TARGET = 3067
@@ -212,6 +213,7 @@ def qpe_grid_caching(
         tifdir = os.path.join(resultsdir, SINGLE_SCAN_SUBDIR)
         os.makedirs(tifdir, exist_ok=True)
     # read ts and NOD using h5py for increased performance
+    logger.debug(f'Reading {h5path}')
     with h5py.File(h5path, 'r') as h5f:
         t = sweep_start_datetime(h5f, f'/{dset}')
         ts = t.strftime('%Y%m%d%H%M')
@@ -407,7 +409,8 @@ def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
     accums = accums.rename({LWE: ACC})
     dat = accums.max('time').rio.write_crs(EPSG_TARGET)
     dat['time'] = accums[ACC].idxmax(dim='time', keep_attrs=True).chunk(chunks)
-    dat = dat.compute()
+    with ProgressLogging(logger, dt=5):
+        dat = dat.compute(dt=5)
     tstamp = accums.time[-1].dt.strftime(DATEFMT).item()
     dat = _write_attrs(dat, rds.attrs, win)
     tifp = os.path.join(
