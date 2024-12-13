@@ -410,7 +410,7 @@ def maxit(date: datetime.date, h5paths: List[str], resultsdir: str,
     dat = accums.max('time').rio.write_crs(EPSG_TARGET)
     dat['time'] = accums[ACC].idxmax(dim='time', keep_attrs=True).chunk(chunks)
     with ProgressLogging(logger, dt=5):
-        dat = dat.compute(dt=5)
+        dat = dat.compute(scheduler='synchronous')
     tstamp = accums.time[-1].dt.strftime(DATEFMT).item()
     dat = _write_attrs(dat, rds.attrs, win)
     tifp = os.path.join(
