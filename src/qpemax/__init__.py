@@ -312,7 +312,7 @@ def combine_rds(
         rds = xr.open_mfdataset(
             ncfiles,
             data_vars='minimal',
-            parallel=True,
+            parallel=False,
             engine='h5netcdf',
             phony_dims='sort',
             chunks=chunks,

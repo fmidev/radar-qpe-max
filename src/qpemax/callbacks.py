@@ -12,9 +12,8 @@ class _Tracker(Process):
     """Background process to track memory usage
     of the children of the current process"""
 
-    def __init__(self, dt=1):
+    def __init__(self):
         super().__init__()
-        self.dt = dt
         self.parent_pid = current_process().pid
         self.parent_conn, self.child_conn = Pipe()
 
@@ -25,8 +24,9 @@ class _Tracker(Process):
         self.join()
 
     def _update_pids(self, pid):
+        children = self.parent.children()
         return [self.parent] + [
-            p for p in self.parent.children() if p.pid != pid and p.status() != "zombie"
+            p for p in children if p.pid != pid and p.status() != "zombie"
         ]
 
     def run(self):
@@ -47,7 +47,6 @@ class _Tracker(Process):
             except Exception:
                 memory = np.nan
             self.child_conn.send(memory)
-            time.sleep(self.dt)
         self.child_conn.close()
 
 
@@ -55,7 +54,7 @@ class ProgressLogging(Callback):
     def __init__(self, logger, dt=1):
         self._logger = logger
         self._dt = dt
-        self._tracker = _Tracker(dt=dt)
+        self._tracker = _Tracker()
 
     def _start(self, dsk):
         self._state = None
@@ -88,15 +87,15 @@ class ProgressLogging(Callback):
         if s is None:
             return
         self._tracker.parent_conn.send("update")
-        memory = self._tracker.parent_conn.recv()
-        print(memory)
+        mem = self._tracker.parent_conn.recv()
         ndone = len(s["finished"])
-        ntasks = sum(len(s[k]) for k in ["ready", "waiting", "running"]) + ndone
+        todo_status = ["ready", "waiting", "running"]
+        ntasks = sum(len(s[k]) for k in todo_status) + ndone
         if ndone < ntasks:
-            self._log_progress(ndone / ntasks if ntasks else 0, elapsed, memory)
+            self._log_progress(ndone / ntasks if ntasks else 0, elapsed, mem)
 
     def _log_progress(self, frac, elapsed, memory):
         percent = frac * 100
         elapsed = format_time(elapsed)
-        msg = f"{percent:.1f}% done in {elapsed}, memory usage: {memory:.1f} MB"
+        msg = f"{percent:.1f}% done in {elapsed}, mem: {memory:.1f} MB"
         self._logger.info(msg)
