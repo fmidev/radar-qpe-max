@@ -73,7 +73,11 @@ logger = logging.getLogger('airflow.task')
 
 def read_odim_h5(h5path: str, **kws) -> pyart.core.Radar:
     """Read radar data from ODIM H5 file."""
-    radar = pyart.aux_io.read_odim_h5(h5path, **kws)
+    try:
+        radar = pyart.aux_io.read_odim_h5(h5path, **kws)
+    except Exception as e:
+        logger.error(f'Reading {h5path}: {e}')
+        raise
     # workaround for pyart bug
     radar.altitude['data'] = radar.altitude['data'].flatten()
     radar.latitude['data'] = radar.latitude['data'].flatten()
