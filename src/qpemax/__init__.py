@@ -27,6 +27,7 @@ from radproc.aliases.fmi import LWE
 from radproc.radar import z_r_qpe
 from radproc.tools import source2dict
 from qpemax._version import __version__
+from qpemax.callbacks import ProgressLogging
 
 
 EPSG_TARGET = 3067
@@ -72,7 +73,11 @@ logger = logging.getLogger('airflow.task')
 
 def read_odim_h5(h5path: str, **kws) -> pyart.core.Radar:
     """Read radar data from ODIM H5 file."""
-    radar = pyart.aux_io.read_odim_h5(h5path, **kws)
+    try:
+        radar = pyart.aux_io.read_odim_h5(h5path, **kws)
+    except Exception as e:
+        logger.error(f'Reading {h5path}: {e}')
+        raise
     # workaround for pyart bug
     radar.altitude['data'] = radar.altitude['data'].flatten()
     radar.latitude['data'] = radar.latitude['data'].flatten()
@@ -212,6 +217,7 @@ def qpe_grid_caching(
         tifdir = os.path.join(resultsdir, SINGLE_SCAN_SUBDIR)
         os.makedirs(tifdir, exist_ok=True)
     # read ts and NOD using h5py for increased performance
+    logger.debug(f'Reading {h5path}')
     with h5py.File(h5path, 'r') as h5f:
         t = sweep_start_datetime(h5f, f'/{dset}')
         ts = t.strftime('%Y%m%d%H%M')
@@ -309,7 +315,7 @@ def combine_rds(
         rds = xr.open_mfdataset(
             ncfiles,
             data_vars='minimal',
-            parallel=True,
+            parallel=False,
             engine='h5netcdf',
             phony_dims='sort',
             chunks=chunks,
@@ -425,7 +431,8 @@ def maxit(date: datetime.date, ncfile: str,
     accums = accums.rename({LWE: ACC})
     dat = accums.max('time').rio.write_crs(EPSG_TARGET)
     dat['time'] = accums[ACC].idxmax(dim='time', keep_attrs=True).chunk(chunks)
-    dat = dat.compute()
+    with ProgressLogging(logger, dt=5):
+        dat = dat.compute(scheduler='synchronous')
     return _write_attrs(dat, rds.attrs, win)
 
 

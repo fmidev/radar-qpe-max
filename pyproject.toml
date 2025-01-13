@@ -23,6 +23,7 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
+  "psutil",
   "rioxarray",
   "radproc[arm] @ git+https://github.com/fmidev/radproc",
   "flox", # not a hard dependency
