@@ -376,7 +376,7 @@ def generate_individual_rasters(
     tstep_guess = tstep_from_fpaths(h5paths)
     acc_scaling_guess = datetime.timedelta(hours=1) / tstep_guess
     for fpath in h5paths:
-        qpe_grid_caching(
+        nod = qpe_grid_caching(
             fpath, size, resolution, ignore_cache,
             resultsdir=resultsdir,
             cachedir=cachedir,
@@ -384,6 +384,7 @@ def generate_individual_rasters(
             scans_per_hour=acc_scaling_guess,
             chunksize=chunksize,
         )
+    return nod
 
 
 def combine_rasters(
@@ -410,10 +411,8 @@ def combine_rasters(
 def maxit(date: datetime.date, ncfile: str,
           win: str = '1 D', chunksize: int = DEFAULT_CHUNKSIZE) -> xr.Dataset:
     """Moving window maximum precipitation accumulation."""
-    chunks = {'x': chunksize, 'y': chunksize}
     rds = load_chunked_dataset(ncfile)
     win_trim = win.replace(' ', '')
-    winlow = win_trim.lower()
     # number of timesteps in window (e.g. 288 5min steps in a day)
     iwin = rds.time.groupby(rds.time.dt.floor(win_trim)).sizes['time']
     dwin = pd.to_timedelta(win)
@@ -429,18 +428,18 @@ def maxit(date: datetime.date, ncfile: str,
         rollsel[LWE].rolling({'time': iwin}).sum() / acc_scaling
     ).to_dataset()
     accums = accums.rename({LWE: ACC})
+    accums.load()
+    tstamp = accums.time[-1].dt.strftime(DATEFMT).item()
     dat = accums.max('time').rio.write_crs(EPSG_TARGET)
-    dat['time'] = accums[ACC].idxmax(dim='time', keep_attrs=True).chunk(chunks)
-    with ProgressLogging(logger, dt=5):
-        dat = dat.compute(scheduler='synchronous')
-    return _write_attrs(dat, rds.attrs, win)
+    dat['time'] = accums[ACC].idxmax(dim='time', keep_attrs=True)
+    dat = dat.unify_chunks()
+    return _write_attrs(dat, rds.attrs, win), tstamp
 
 
 def write_max_tifs(
-        dat: xr.Dataset, resultsdir: str, nod: str, win: str, corr: str = '',
+        dat: xr.Dataset, tstamp: str, resultsdir: str, nod: str, win: str, corr: str = '',
         size: int = DEFAULT_XY_SIZE,
         resolution: int = DEFAULT_RESOLUTION) -> None:
-    tstamp = dat.time[-1].dt.strftime(DATEFMT).item()
     tifp = os.path.join(
         resultsdir,
         f'{nod}{tstamp}max{win}{size}px{resolution}m{corr}.tif')
