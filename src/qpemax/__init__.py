@@ -408,8 +408,19 @@ def combine_rasters(
     return ncfile, ncfiles_obsolete
 
 
+def write_accums(accums, accumsfile):
+    """Write accumulation dataset to file."""
+    # check if the file exists already
+    if os.path.isfile(accumsfile):
+        logger.info(f'File {accumsfile} exists.')
+        return
+    encoding = DEFAULT_ENCODING.copy()
+    encoding[LWE]['chunksizes'] = (accums.shape[0], 16, 16)
+    accums.to_netcdf(accumsfile, encoding=encoding, engine='h5netcdf')
+
+
 def maxit(date: datetime.date, ncfile: str,
-          win: str = '1 D') -> xr.Dataset:
+          win: str = '1 D') -> tuple[xr.Dataset, str]:
     """Moving window maximum precipitation accumulation."""
     rds = load_chunked_dataset(ncfile)
     win_trim = win.replace(' ', '')
@@ -426,12 +437,16 @@ def maxit(date: datetime.date, ncfile: str,
     acc_scaling = datetime.timedelta(hours=1) / tdelta # 12 for 5min steps
     accums = (
         rollsel[LWE].rolling({'time': iwin}).sum() / acc_scaling
-    ).to_dataset()
-    accums = accums.rename({LWE: ACC})
-    accums.load()
+    )
+    accumsfile = ncfile.replace('.nc', f'_acc{win_trim}.nc').lower()
+    logger.info(f'Writing accumulation dataset to {accumsfile}.')
+    write_accums(accums, accumsfile)
+    logger.info('Loading accumulation dataset.')
+    accums = xr.open_dataarray(accumsfile, engine='h5netcdf', chunks={})
+    accums = accums.rename(ACC)
     tstamp = accums.time[-1].dt.strftime(DATEFMT).item()
     dat = accums.max('time').rio.write_crs(EPSG_TARGET)
-    dat['time'] = accums[ACC].idxmax(dim='time', keep_attrs=True)
+    dat['time'] = accums.idxmax(dim='time', keep_attrs=True).rio.write_crs(EPSG_TARGET)
     dat = dat.unify_chunks()
     return _write_attrs(dat, rds.attrs, win), tstamp
 
