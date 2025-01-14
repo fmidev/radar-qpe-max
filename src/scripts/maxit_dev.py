@@ -42,10 +42,12 @@ if __name__ == '__main__':
         size=size,
         resolution=resolution,
         chunksize=chunksize,
+        ignore_cache=False,
     )
 
     # Calculate maximum precipitation accumulation
-    dat, tstamp = maxit(date, ncfile, win=win, chunksize=chunksize)
+    dat, tstamp = maxit(date, ncfile, win=win)
 
     # Write results to GeoTIFF files
-    write_max_tifs(dat, tstamp=tstamp, resultsdir=resultsdir, nod=nod, win=win)
+    write_max_tifs(dat, tstamp=tstamp, resultsdir=resultsdir, nod=nod, win=win,
+                   size=size, resolution=resolution)

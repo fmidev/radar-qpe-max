@@ -409,7 +409,7 @@ def combine_rasters(
 
 
 def maxit(date: datetime.date, ncfile: str,
-          win: str = '1 D', chunksize: int = DEFAULT_CHUNKSIZE) -> xr.Dataset:
+          win: str = '1 D') -> xr.Dataset:
     """Moving window maximum precipitation accumulation."""
     rds = load_chunked_dataset(ncfile)
     win_trim = win.replace(' ', '')
@@ -440,6 +440,7 @@ def write_max_tifs(
         dat: xr.Dataset, tstamp: str, resultsdir: str, nod: str, win: str, corr: str = '',
         size: int = DEFAULT_XY_SIZE,
         resolution: int = DEFAULT_RESOLUTION) -> None:
+    win = win.lower()
     tifp = os.path.join(
         resultsdir,
         f'{nod}{tstamp}max{win}{size}px{resolution}m{corr}.tif')
