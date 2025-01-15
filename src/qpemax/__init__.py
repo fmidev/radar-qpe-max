@@ -285,17 +285,18 @@ def _write_dattime_attrs(data: xr.DataArray, rdattrs: dict) -> xr.DataArray:
 
 
 def _write_tifs(
-        dat: xr.Dataset, tifp: str, tift: str, blocksize: int = 512) -> None:
+        dat: xr.DataArray, dattime: xr.DataArray, tifp: str, tift: str, blocksize: int = 512) -> None:
     """Write main geotiff products to files."""
-    tunits = 'minutes since ' + str(dat.time.min().item())
-    enc = {'time': {'units': tunits, 'calendar': 'gregorian'}}
-    dat.rio.update_encoding(enc, inplace=True)
-    dat[ACC].rio.to_raster(
+    dattime.load()
+    tunits = 'minutes since ' + str(dattime.min().item())
+    enc = {'units': tunits, 'calendar': 'gregorian'}
+    dattime.rio.update_encoding(enc, inplace=True)
+    dat.rio.to_raster(
         tifp, driver='COG',
         dtype='uint16', compress=COG_COMPRESS,
         blocksize=blocksize,
     )
-    dat['time'].rio.to_raster(tift, dtype='uint16', compress=COG_COMPRESS)
+    dattime.rio.to_raster(tift, dtype='uint16', compress=COG_COMPRESS)
     unidat = rioxarray.open_rasterio(tift).rio.update_attrs({'units': tunits})
     unidat.rio.to_raster(
         tift, compress=COG_COMPRESS,
@@ -459,7 +460,7 @@ def maxit(date: datetime.date, ncfile: str,
 
 
 def write_max_tifs(
-        dat: xr.Dataset, date: datetime.date, resultsdir: str, nod: str, win: str, corr: str = '',
+        dat: xr.DataArray, dattime: xr.DataArray, date: datetime.date, resultsdir: str, nod: str, win: str, corr: str = '',
         size: int = DEFAULT_XY_SIZE,
         resolution: int = DEFAULT_RESOLUTION) -> None:
     win = win.lower()
@@ -470,4 +471,4 @@ def write_max_tifs(
     tift = os.path.join(
         resultsdir,
         f'{nod}{tstamp}maxtime{win}{size}px{resolution}m{corr}.tif')
-    _write_tifs(dat, tifp, tift)
+    _write_tifs(dat, dattime, tifp, tift)

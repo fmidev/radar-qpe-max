@@ -49,5 +49,5 @@ if __name__ == '__main__':
     dat, dattime = maxit(date, ncfile, win=win)
 
     # Write results to GeoTIFF files
-    write_max_tifs(dat, date, resultsdir=resultsdir, nod=nod, win=win,
+    write_max_tifs(dat, dattime, date, resultsdir=resultsdir, nod=nod, win=win,
                    size=size, resolution=resolution)
