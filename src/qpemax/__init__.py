@@ -265,24 +265,30 @@ def two_day_glob(
     return sorted(ls), ls0
 
 
-def _write_attrs(data: xr.Dataset, rdattrs: dict, win: str) -> xr.Dataset:
+def _write_dat_attrs(data: xr.Dataset, rdattrs: dict, win: str) -> xr.Dataset:
     """Write attributes to precipitation maximum data."""
     dat = data.copy()
-    dat[ACC].attrs.update(ATTRS[ACC])
-    dat[ACC].attrs.update({'long_name': 'maximum precipitation accumulation'})
+    dat.attrs.update(ATTRS[ACC])
+    dat.attrs.update({'long_name': 'maximum precipitation accumulation'})
     acc_cell = {'cell_methods': f'time: maximum (interval: {win.lower()})'}
-    dat[ACC].attrs.update(acc_cell)
-    dat[ACC].attrs.update(rdattrs)
-    dat['time'].attrs.update(rdattrs)
-    dat['time'].attrs.update(ATTRS['time'])
+    dat.attrs.update(acc_cell)
+    dat.attrs.update(rdattrs)
     return dat.rio.write_coordinate_system()
+
+
+def _write_dattime_attrs(data: xr.DataArray, rdattrs: dict) -> xr.DataArray:
+    """Write attributes to precipitation maximum time data."""
+    dattime = data.copy()
+    dattime.attrs.update(rdattrs)
+    dattime.attrs.update(ATTRS['time'])
+    return dattime.rio.write_coordinate_system()
 
 
 def _write_tifs(
         dat: xr.Dataset, tifp: str, tift: str, blocksize: int = 512) -> None:
     """Write main geotiff products to files."""
     tunits = 'minutes since ' + str(dat.time.min().item())
-    enc = {'time': {'units': tunits, 'calendar': 'proleptic_gregorian'}}
+    enc = {'time': {'units': tunits, 'calendar': 'gregorian'}}
     dat.rio.update_encoding(enc, inplace=True)
     dat[ACC].rio.to_raster(
         tifp, driver='COG',
@@ -371,7 +377,7 @@ def generate_individual_rasters(
         size: int = DEFAULT_XY_SIZE,
         resolution: int = DEFAULT_RESOLUTION,
         chunksize: int = DEFAULT_CHUNKSIZE,
-        ignore_cache: bool = False, dbz_field: str = ZH) -> None:
+        ignore_cache: bool = False, dbz_field: str = ZH) -> str:
     """Generate individual precipitation rasters and return the nod."""
     tstep_guess = tstep_from_fpaths(h5paths)
     acc_scaling_guess = datetime.timedelta(hours=1) / tstep_guess
@@ -415,12 +421,12 @@ def write_accums(accums, accumsfile):
         logger.info(f'File {accumsfile} exists.')
         return
     encoding = DEFAULT_ENCODING.copy()
-    encoding[LWE]['chunksizes'] = (accums.shape[0], 16, 16)
+    encoding[LWE]['chunksizes'] = (accums.shape[0], 8, 8)
     accums.to_netcdf(accumsfile, encoding=encoding, engine='h5netcdf')
 
 
 def maxit(date: datetime.date, ncfile: str,
-          win: str = '1 D') -> tuple[xr.Dataset, str]:
+          win: str = '1D'):
     """Moving window maximum precipitation accumulation."""
     rds = load_chunked_dataset(ncfile)
     win_trim = win.replace(' ', '')
@@ -443,19 +449,21 @@ def maxit(date: datetime.date, ncfile: str,
     write_accums(accums, accumsfile)
     logger.info('Loading accumulation dataset.')
     accums = xr.open_dataarray(accumsfile, engine='h5netcdf', chunks={})
+    accums = accums.convert_calendar(calendar='standard', use_cftime=True)
     accums = accums.rename(ACC)
-    tstamp = accums.time[-1].dt.strftime(DATEFMT).item()
     dat = accums.max('time').rio.write_crs(EPSG_TARGET)
-    dat['time'] = accums.idxmax(dim='time', keep_attrs=True).rio.write_crs(EPSG_TARGET)
-    dat = dat.unify_chunks()
-    return _write_attrs(dat, rds.attrs, win), tstamp
+    dattime = accums.idxmax(dim='time', keep_attrs=True).rio.write_crs(EPSG_TARGET)
+    dat = _write_dat_attrs(dat, rds.attrs, win_trim)
+    dattime = _write_dattime_attrs(dattime, rds.attrs)
+    return dat, dattime
 
 
 def write_max_tifs(
-        dat: xr.Dataset, tstamp: str, resultsdir: str, nod: str, win: str, corr: str = '',
+        dat: xr.Dataset, date: datetime.date, resultsdir: str, nod: str, win: str, corr: str = '',
         size: int = DEFAULT_XY_SIZE,
         resolution: int = DEFAULT_RESOLUTION) -> None:
     win = win.lower()
+    tstamp = date.strftime(DATEFMT)
     tifp = os.path.join(
         resultsdir,
         f'{nod}{tstamp}max{win}{size}px{resolution}m{corr}.tif')
