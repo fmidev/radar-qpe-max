@@ -59,7 +59,7 @@ if __name__ == '__main__':
         resolution=resolution,
         chunksize=chunksize,
         win=win)
-    dat, dattime = aggmax(accfile, attrs)
+    dat, dattime = aggmax(accfile, attrs, chunksize=chunksize)
 
     # Process geotiff products
     write_max_tifs(dat, dattime, date, resultsdir=resultsdir, nod=nod, win=win,

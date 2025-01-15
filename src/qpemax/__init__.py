@@ -36,7 +36,7 @@ ACC = 'lwe_accum'
 BASENAME_FMT = '{ts}{nod}{size}px{resolution}m{corr}'
 DATEGLOB = '????????????'
 QPE_CACHE_FMT = BASENAME_FMT + '{chunksize}ch.nc'
-ACC_CACHE_FMT = BASENAME_FMT + '_acc{win}.nc'
+ACC_CACHE_FMT = BASENAME_FMT + '{chunksize}ch_acc{win}.nc'
 QPE_TIF_FMT = BASENAME_FMT + '.tif'
 LWE_SCALE_FACTOR = 0.01
 DATEFMT = '%Y%m%d'
@@ -434,14 +434,19 @@ def combine_rasters(
     return ncfile, ncfiles_obsolete
 
 
-def _write_accums(accums, accumsfile, ignore_cache=False):
+def acc_ch(chunksize: int) -> int:
+    """Choose accumulation chunksize."""
+    return min(chunksize, ACC_CHUNKSIZE)
+
+
+def _write_accums(accums, accumsfile, acc_chunk, ignore_cache=False):
     """Write accumulation dataset to file."""
     # check if the file exists already
     if os.path.isfile(accumsfile) and not ignore_cache:
         logger.info(f'File {accumsfile} exists.')
         return
     encoding = DEFAULT_ENCODING.copy()
-    encoding[LWE]['chunksizes'] = (accums.shape[0], ACC_CHUNKSIZE, ACC_CHUNKSIZE)
+    encoding[LWE]['chunksizes'] = (accums.shape[0], acc_chunk, acc_chunk)
     with ProgressLogging(logger, dt=5):
         accums.to_netcdf(accumsfile, encoding=encoding, engine='h5netcdf')
 
@@ -461,12 +466,14 @@ def accu(
         corr=corr,
         chunksize=chunksize,
     )
+    acc_chunk = acc_ch(chunksize)
     accfile = ACC_CACHE_FMT.format(
         ts=date.strftime(DATEFMT),
         nod=nod,
         size=size,
         resolution=resolution,
         corr=corr,
+        chunksize=acc_chunk,
         win=win,
     ).lower()
     ncpath = os.path.join(cachedir, ncfile)
@@ -488,11 +495,11 @@ def accu(
         rollsel[LWE].rolling({'time': iwin}).sum() / acc_scaling
     )
     logger.info(f'Processing accumulation dataset to {accpath}')
-    _write_accums(accums, accpath, **kws)
+    _write_accums(accums, accpath, acc_chunk, **kws)
     return accpath, rds.attrs
 
 
-def aggmax(accfile: str, attrs) -> tuple[xr.DataArray, xr.DataArray]:
+def aggmax(accfile: str, attrs, chunksize: int = DEFAULT_CHUNKSIZE) -> tuple[xr.DataArray, xr.DataArray]:
     logger.info('Loading accumulation dataset.')
     accums = xr.open_dataarray(accfile, engine='h5netcdf', chunks={})
     accums = accums.convert_calendar(calendar='standard', use_cftime=True)
@@ -501,7 +508,8 @@ def aggmax(accfile: str, attrs) -> tuple[xr.DataArray, xr.DataArray]:
     dattime = accums.idxmax(dim='time', keep_attrs=True).rio.write_crs(EPSG_TARGET)
     dat = _write_dat_attrs(dat, attrs)
     dattime = _write_dattime_attrs(dattime, attrs)
-    dattime = dattime.chunk((ACC_CHUNKSIZE, ACC_CHUNKSIZE))
+    acc_chunk = acc_ch(chunksize)
+    dattime = dattime.chunk((acc_chunk, acc_chunk))
     logger.debug('aggmax returns')
     return dat, dattime
 
