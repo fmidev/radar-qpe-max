@@ -14,10 +14,16 @@ if __name__ == '__main__':
     #date = datetime.date(2022, 6, 4)
     #date = datetime.date(2022, 8, 5)
     date = datetime.date(2024, 5, 29)
-    size = 2048  # 2048
-    resolution = 250  # 250
-    chunksize = 256  # 256
-    win = '1h'  # '1h' or '1D'
+    quickrun = True
+    if quickrun:
+        size = 64
+        resolution = 8000
+        chunksize = 64
+    else:
+        size = 2048  # 2048
+        resolution = 250  # 250
+        chunksize = 128  # 256
+    win = '1D'  # '1h' or '1D'
     #
     resultsdir = os.path.expanduser('~/results/radar-qpe-max')
     #datadir = os.path.expanduser('~/data/alakulma')
@@ -44,10 +50,15 @@ if __name__ == '__main__':
         chunksize=chunksize,
         ignore_cache=False,
     )
-    accfile = ncfile.replace('.nc', f'_acc{win}.nc').lower()
 
     # maximum precipitation accumulation logic
-    attrs = accu(date, ncfile, accfile, win=win)
+    accfile, attrs = accu(
+        date, nod,
+        cachedir=cachedir,
+        size=size,
+        resolution=resolution,
+        chunksize=chunksize,
+        win=win)
     dat, dattime = aggmax(accfile, attrs)
 
     # Process geotiff products

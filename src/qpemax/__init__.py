@@ -36,6 +36,7 @@ ACC = 'lwe_accum'
 BASENAME_FMT = '{ts}{nod}{size}px{resolution}m{corr}'
 DATEGLOB = '????????????'
 QPE_CACHE_FMT = BASENAME_FMT + '{chunksize}ch.nc'
+ACC_CACHE_FMT = BASENAME_FMT + '_acc{win}.nc'
 QPE_TIF_FMT = BASENAME_FMT + '.tif'
 LWE_SCALE_FACTOR = 0.01
 DATEFMT = '%Y%m%d'
@@ -446,9 +447,31 @@ def _write_accums(accums, accumsfile, ignore_cache=False):
 
 
 def accu(
-        date: datetime.date, ncfile: str, accfile: str, win: str = '1D'):
+        date: datetime.date, nod: str, cachedir: str = DEFAULT_CACHE_DIR,
+        size: int = DEFAULT_XY_SIZE, resolution: int = DEFAULT_RESOLUTION,
+        chunksize: int = DEFAULT_CHUNKSIZE, dbz_field: str = ZH,
+        win: str = '1D', **kws):
     """Moving window maximum precipitation accumulation."""
-    rds = load_chunked_dataset(ncfile)
+    corr = '_c' if 'C' in dbz_field else ''
+    ncfile = QPE_CACHE_FMT.format(
+        ts=date.strftime(DATEFMT),
+        nod=nod,
+        size=size,
+        resolution=resolution,
+        corr=corr,
+        chunksize=chunksize,
+    )
+    accfile = ACC_CACHE_FMT.format(
+        ts=date.strftime(DATEFMT),
+        nod=nod,
+        size=size,
+        resolution=resolution,
+        corr=corr,
+        win=win,
+    ).lower()
+    ncpath = os.path.join(cachedir, ncfile)
+    accpath = os.path.join(cachedir, accfile)
+    rds = load_chunked_dataset(ncpath)
     win_trim = win.replace(' ', '')
     # number of timesteps in window (e.g. 288 5min steps in a day)
     iwin = rds.time.groupby(rds.time.dt.floor(win_trim)).sizes['time']
@@ -464,9 +487,9 @@ def accu(
     accums = (
         rollsel[LWE].rolling({'time': iwin}).sum() / acc_scaling
     )
-    logger.info(f'Processing accumulation dataset to {accfile}')
-    _write_accums(accums, accfile)
-    return rds.attrs
+    logger.info(f'Processing accumulation dataset to {accpath}')
+    _write_accums(accums, accpath, **kws)
+    return accpath, rds.attrs
 
 
 def aggmax(accfile: str, attrs) -> tuple[xr.DataArray, xr.DataArray]:
