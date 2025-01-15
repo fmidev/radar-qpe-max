@@ -33,10 +33,10 @@ from qpemax.callbacks import ProgressLogging
 EPSG_TARGET = 3067
 ZH = 'DBZH'
 ACC = 'lwe_accum'
-_qpefmt = '{ts}{nod}{size}px{resolution}m{corr}'
+BASENAME_FMT = '{ts}{nod}{size}px{resolution}m{corr}'
 DATEGLOB = '????????????'
-QPE_CACHE_FMT = _qpefmt + '.nc'
-QPE_TIF_FMT = _qpefmt + '.tif'
+QPE_CACHE_FMT = BASENAME_FMT + '{chunksize}ch.nc'
+QPE_TIF_FMT = BASENAME_FMT + '.tif'
 LWE_SCALE_FACTOR = 0.01
 DATEFMT = '%Y%m%d'
 UINT16_FILLVAL = np.iinfo(np.uint16).max
@@ -210,7 +210,8 @@ def sweep_start_datetime(
 def qpe_grid_caching(
         h5path: str, size: int, resolution: int,
         ignore_cache: bool = False, resultsdir: Optional[str] = None,
-        cachedir: str = DEFAULT_CACHE_DIR, dbz_field: str = ZH, **kws) -> str:
+        cachedir: str = DEFAULT_CACHE_DIR, dbz_field: str = ZH,
+        chunksize: int = DEFAULT_CHUNKSIZE, **kws) -> str:
     """Create precipitation grid cache file and optionally geotiff."""
     dset = 'dataset1' # lowest elevation
     corr = '_c' if 'C' in dbz_field else ''
@@ -223,8 +224,9 @@ def qpe_grid_caching(
         t = sweep_start_datetime(h5f, f'/{dset}')
         ts = t.strftime('%Y%m%d%H%M')
         nod = get_nod(h5f)
-    cachefname = QPE_CACHE_FMT.format(ts=ts, nod=nod, size=size,
-                                      resolution=resolution, corr=corr)
+    cachefname = QPE_CACHE_FMT.format(
+        ts=ts, nod=nod, size=size, resolution=resolution, corr=corr,
+        chunksize=chunksize)
     cachefile = os.path.join(cachedir, cachefname)
     if os.path.isfile(cachefile) and not ignore_cache:
         logger.info(f'Cache file {cachefile} exists.')
@@ -240,7 +242,7 @@ def qpe_grid_caching(
         tiffile = None
     z_r_qpe(radar, dbz_field=dbz_field)
     save_precip_grid(radar, cachefile, tiffile=tiffile, size=size,
-                     resolution=resolution, **kws)
+                     resolution=resolution, chunksize=chunksize, **kws)
     return nod
 
 
@@ -312,7 +314,7 @@ def _write_dat_tif(dat: xr.DataArray, tifp: str, blocksize: int = 512) -> None:
         )
 
 
-def combine_rds(
+def _combine_rds(
         ncfiles: List[str],
         chunksize: int,
         date: datetime.date,
@@ -415,10 +417,11 @@ def combine_rasters(
         size=size,
         resolution=resolution,
         corr=corr,
+        chunksize=chunksize,
     )
     globfmt = os.path.join(cachedir, globfmt)
     ncfiles, ncfiles_obsolete = two_day_glob(date, globfmt=globfmt)
-    ncfile = combine_rds(ncfiles, chunksize, date, ignore_cache)
+    ncfile = _combine_rds(ncfiles, chunksize, date, ignore_cache)
     return ncfile, ncfiles_obsolete
 
 
