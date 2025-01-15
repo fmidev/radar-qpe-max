@@ -62,6 +62,7 @@ ATTRS = {
     }
 }
 DEFAULT_CHUNKSIZE = 256
+ACC_CHUNKSIZE = 64
 DEFAULT_RESOLUTION = 250
 DEFAULT_XY_SIZE = 2048
 DEFAULT_CACHE_DIR = '/tmp/radar-qpe-max'
@@ -282,18 +283,15 @@ def _write_dattime_attrs(data: xr.DataArray, rdattrs: dict) -> xr.DataArray:
     return dattime.rio.write_coordinate_system()
 
 
-def _write_tifs(
-        dat: xr.DataArray, dattime: xr.DataArray, tifp: str, tift: str, blocksize: int = 512) -> None:
-    """Write main geotiff products to files."""
-    dattime.load()
+def _write_dattime_tif(
+        dattime: xr.DataArray, tift: str, blocksize: int = 512) -> None:
+    """timestamp geotiff"""
+    logger.info(f'Processing geotiff product {tift}')
+    with ProgressLogging(logger, dt=5):
+        dattime.load()
     tunits = 'minutes since ' + str(dattime.min().item())
     enc = {'units': tunits, 'calendar': 'gregorian'}
     dattime.rio.update_encoding(enc, inplace=True)
-    dat.rio.to_raster(
-        tifp, driver='COG',
-        dtype='uint16', compress=COG_COMPRESS,
-        blocksize=blocksize,
-    )
     dattime.rio.to_raster(tift, dtype='uint16', compress=COG_COMPRESS)
     unidat = rioxarray.open_rasterio(tift).rio.update_attrs({'units': tunits})
     unidat.rio.to_raster(
@@ -301,6 +299,17 @@ def _write_tifs(
         driver='COG', dtype='uint16',
         blocksize=blocksize,
     )
+
+
+def _write_dat_tif(dat: xr.DataArray, tifp: str, blocksize: int = 512) -> None:
+    """main geotiff"""
+    logger.info(f'Processing geotiff product {tifp}')
+    with ProgressLogging(logger, dt=5):
+        dat.rio.to_raster(
+            tifp, driver='COG',
+            dtype='uint16', compress=COG_COMPRESS,
+            blocksize=blocksize,
+        )
 
 
 def combine_rds(
@@ -413,15 +422,16 @@ def combine_rasters(
     return ncfile, ncfiles_obsolete
 
 
-def write_accums(accums, accumsfile, ignore_cache=False):
+def _write_accums(accums, accumsfile, ignore_cache=False):
     """Write accumulation dataset to file."""
     # check if the file exists already
     if os.path.isfile(accumsfile) and not ignore_cache:
         logger.info(f'File {accumsfile} exists.')
         return
     encoding = DEFAULT_ENCODING.copy()
-    encoding[LWE]['chunksizes'] = (accums.shape[0], 8, 8)
-    accums.to_netcdf(accumsfile, encoding=encoding, engine='h5netcdf')
+    encoding[LWE]['chunksizes'] = (accums.shape[0], ACC_CHUNKSIZE, ACC_CHUNKSIZE)
+    with ProgressLogging(logger, dt=5):
+        accums.to_netcdf(accumsfile, encoding=encoding, engine='h5netcdf')
 
 
 def accu(
@@ -443,8 +453,8 @@ def accu(
     accums = (
         rollsel[LWE].rolling({'time': iwin}).sum() / acc_scaling
     )
-    logger.info(f'Writing accumulation dataset to {accfile}.')
-    write_accums(accums, accfile)
+    logger.info(f'Processing accumulation dataset to {accfile}')
+    _write_accums(accums, accfile)
     return rds.attrs
 
 
@@ -457,6 +467,8 @@ def aggmax(accfile: str, attrs) -> tuple[xr.DataArray, xr.DataArray]:
     dattime = accums.idxmax(dim='time', keep_attrs=True).rio.write_crs(EPSG_TARGET)
     dat = _write_dat_attrs(dat, attrs)
     dattime = _write_dattime_attrs(dattime, attrs)
+    dattime = dattime.chunk((ACC_CHUNKSIZE, ACC_CHUNKSIZE))
+    logger.debug('aggmax returns')
     return dat, dattime
 
 
@@ -472,4 +484,5 @@ def write_max_tifs(
     tift = os.path.join(
         resultsdir,
         f'{nod}{tstamp}maxtime{win}{size}px{resolution}m{corr}.tif')
-    _write_tifs(dat, dattime, tifp, tift)
+    _write_dat_tif(dat, tifp)
+    _write_dattime_tif(dattime, tift)

@@ -11,16 +11,16 @@ logger = logging.getLogger('airflow.task')
 
 if __name__ == '__main__':
     streamlogger_setup(logger, loglevel=logging.DEBUG)
-    date = datetime.date(2022, 6, 4)
+    #date = datetime.date(2022, 6, 4)
     #date = datetime.date(2022, 8, 5)
     date = datetime.date(2024, 5, 29)
-    size = 64  # 2048
-    resolution = 8000  # 250
-    chunksize = 64  # 256
-    win = '1D'
+    size = 2048  # 2048
+    resolution = 250  # 250
+    chunksize = 256  # 256
+    win = '1h'  # '1h' or '1D'
     #
     resultsdir = os.path.expanduser('~/results/radar-qpe-max')
-    datadir = os.path.expanduser('~/data/alakulma')
+    #datadir = os.path.expanduser('~/data/alakulma')
     #datadir = os.path.expanduser('~/data/polar/fivih')
     datadir = os.path.expanduser('~/data/polar/filuo')
     h5paths, _ = two_day_glob(date, globfmt=os.path.join(datadir, '{date}*.h5'))
@@ -46,10 +46,10 @@ if __name__ == '__main__':
     )
     accfile = ncfile.replace('.nc', f'_acc{win}.nc').lower()
 
-    # Calculate maximum precipitation accumulation
+    # maximum precipitation accumulation logic
     attrs = accu(date, ncfile, accfile, win=win)
     dat, dattime = aggmax(accfile, attrs)
 
-    # Write results to GeoTIFF files
+    # Process geotiff products
     write_max_tifs(dat, dattime, date, resultsdir=resultsdir, nod=nod, win=win,
                    size=size, resolution=resolution)
