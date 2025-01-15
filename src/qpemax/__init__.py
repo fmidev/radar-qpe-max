@@ -316,14 +316,13 @@ def _write_dat_tif(dat: xr.DataArray, tifp: str, blocksize: int = 512) -> None:
 
 def _combine_rds(
         ncfiles: List[str],
+        ncpath: str,
         chunksize: int,
-        date: datetime.date,
         ignore_cache: bool) -> str:
     """Prepare precip rate dataset.
 
     Load cached precipitation rasters from netcdf files and write them to a
     single chunked netcdf file."""
-    ncpath = re.sub(r'\d{12}', date.strftime(DATEFMT), ncfiles[0])
     if not os.path.isfile(ncpath) or ignore_cache: # then create it
         logger.info('Loading cached individual precipitation rasters.')
         # combine all files into a single dataset
@@ -419,9 +418,18 @@ def combine_rasters(
         corr=corr,
         chunksize=chunksize,
     )
+    ncfile = QPE_CACHE_FMT.format(
+        ts=date.strftime(DATEFMT),
+        nod=nod,
+        size=size,
+        resolution=resolution,
+        corr=corr,
+        chunksize=chunksize,
+    )
     globfmt = os.path.join(cachedir, globfmt)
     ncfiles, ncfiles_obsolete = two_day_glob(date, globfmt=globfmt)
-    ncfile = _combine_rds(ncfiles, chunksize, date, ignore_cache)
+    ncpath = os.path.join(cachedir, ncfile)
+    ncfile = _combine_rds(ncfiles, ncpath, chunksize, ignore_cache)
     return ncfile, ncfiles_obsolete
 
 
