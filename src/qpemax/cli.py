@@ -5,7 +5,7 @@ import json
 
 import click
 
-from qpemax import DATEFMT, DEFAULT_CACHE_DIR, two_day_glob, maxit, qpe_grid_caching, __version__
+from qpemax import DATEFMT, DEFAULT_CACHE_DIR, two_day_glob, accu, qpe_grid_caching, __version__
 from qpemax.logs import streamlogger_setup
 
 
@@ -86,7 +86,7 @@ def winmax(yyyymmdd, input_glob, output_dir, cache_dir, size, chunksize, resolut
         resolution = autoresolution(size)
     date = datetime.datetime.strptime(yyyymmdd, DATEFMT)
     h5paths, _ = two_day_glob(date, globfmt=input_glob)
-    nc_obsolete = maxit(
+    nc_obsolete = accu(
         date,
         h5paths,
         output_dir,

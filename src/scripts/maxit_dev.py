@@ -2,7 +2,7 @@ import os
 import logging
 import datetime
 
-from qpemax import get_nod, maxit, generate_individual_rasters, combine_rasters, write_max_tifs, two_day_glob
+from qpemax import accu, aggmax, generate_individual_rasters, combine_rasters, write_max_tifs, two_day_glob
 from qpemax.logs import streamlogger_setup
 
 
@@ -44,9 +44,11 @@ if __name__ == '__main__':
         chunksize=chunksize,
         ignore_cache=False,
     )
+    accfile = ncfile.replace('.nc', f'_acc{win}.nc').lower()
 
     # Calculate maximum precipitation accumulation
-    dat, dattime = maxit(date, ncfile, win=win)
+    attrs = accu(date, ncfile, accfile, win=win)
+    dat, dattime = aggmax(accfile, attrs)
 
     # Write results to GeoTIFF files
     write_max_tifs(dat, dattime, date, resultsdir=resultsdir, nod=nod, win=win,

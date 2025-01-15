@@ -265,13 +265,11 @@ def two_day_glob(
     return sorted(ls), ls0
 
 
-def _write_dat_attrs(data: xr.Dataset, rdattrs: dict, win: str) -> xr.Dataset:
+def _write_dat_attrs(data: xr.Dataset, rdattrs: dict) -> xr.Dataset:
     """Write attributes to precipitation maximum data."""
     dat = data.copy()
     dat.attrs.update(ATTRS[ACC])
     dat.attrs.update({'long_name': 'maximum precipitation accumulation'})
-    acc_cell = {'cell_methods': f'time: maximum (interval: {win.lower()})'}
-    dat.attrs.update(acc_cell)
     dat.attrs.update(rdattrs)
     return dat.rio.write_coordinate_system()
 
@@ -415,10 +413,10 @@ def combine_rasters(
     return ncfile, ncfiles_obsolete
 
 
-def write_accums(accums, accumsfile):
+def write_accums(accums, accumsfile, ignore_cache=False):
     """Write accumulation dataset to file."""
     # check if the file exists already
-    if os.path.isfile(accumsfile):
+    if os.path.isfile(accumsfile) and not ignore_cache:
         logger.info(f'File {accumsfile} exists.')
         return
     encoding = DEFAULT_ENCODING.copy()
@@ -426,8 +424,8 @@ def write_accums(accums, accumsfile):
     accums.to_netcdf(accumsfile, encoding=encoding, engine='h5netcdf')
 
 
-def maxit(date: datetime.date, ncfile: str,
-          win: str = '1D'):
+def accu(
+        date: datetime.date, ncfile: str, accfile: str, win: str = '1D'):
     """Moving window maximum precipitation accumulation."""
     rds = load_chunked_dataset(ncfile)
     win_trim = win.replace(' ', '')
@@ -445,17 +443,20 @@ def maxit(date: datetime.date, ncfile: str,
     accums = (
         rollsel[LWE].rolling({'time': iwin}).sum() / acc_scaling
     )
-    accumsfile = ncfile.replace('.nc', f'_acc{win_trim}.nc').lower()
-    logger.info(f'Writing accumulation dataset to {accumsfile}.')
-    write_accums(accums, accumsfile)
+    logger.info(f'Writing accumulation dataset to {accfile}.')
+    write_accums(accums, accfile)
+    return rds.attrs
+
+
+def aggmax(accfile: str, attrs) -> tuple[xr.DataArray, xr.DataArray]:
     logger.info('Loading accumulation dataset.')
-    accums = xr.open_dataarray(accumsfile, engine='h5netcdf', chunks={})
+    accums = xr.open_dataarray(accfile, engine='h5netcdf', chunks={})
     accums = accums.convert_calendar(calendar='standard', use_cftime=True)
     accums = accums.rename(ACC)
     dat = accums.max('time').rio.write_crs(EPSG_TARGET)
     dattime = accums.idxmax(dim='time', keep_attrs=True).rio.write_crs(EPSG_TARGET)
-    dat = _write_dat_attrs(dat, rds.attrs, win_trim)
-    dattime = _write_dattime_attrs(dattime, rds.attrs)
+    dat = _write_dat_attrs(dat, attrs)
+    dattime = _write_dattime_attrs(dattime, attrs)
     return dat, dattime
 
 
