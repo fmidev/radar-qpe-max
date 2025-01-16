@@ -11,18 +11,23 @@ logger = logging.getLogger('airflow.task')
 
 if __name__ == '__main__':
     streamlogger_setup(logger, loglevel=logging.DEBUG)
+
+    #from dask.distributed import Client
+    #client = Client(n_workers=1, threads_per_worker=1, memory_limit='4GB')
+    #logger.info(client.dashboard_link)
+
     #date = datetime.date(2022, 6, 4)
     #date = datetime.date(2022, 8, 5)
     date = datetime.date(2024, 5, 29)
-    quickrun = True
+    quickrun = False
     if quickrun:
-        size = 64
-        resolution = 8000
-        chunksize = 64
+        size = 512
+        resolution = 1000
+        chunksize = 256
     else:
         size = 2048  # 2048
         resolution = 250  # 250
-        chunksize = 128  # 256
+        chunksize = 512  # 256
     win = '1D'  # '1h' or '1D'
     #
     resultsdir = os.path.expanduser('~/results/radar-qpe-max')
