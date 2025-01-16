@@ -92,7 +92,7 @@ def winmax(yyyymmdd, input_glob, output_dir, cache_dir, size, chunksize, resolut
         output_dir,
         cachedir=cache_dir,
         size=size,
-        chunksize=chunksize,
+        p_chunksize=chunksize,
         resolution=resolution,
         dbz_field=dbz_field,
         win=window

@@ -19,15 +19,15 @@ if __name__ == '__main__':
     #date = datetime.date(2022, 6, 4)
     #date = datetime.date(2022, 8, 5)
     date = datetime.date(2024, 5, 29)
-    quickrun = False
+    quickrun = True
     if quickrun:
         size = 512
         resolution = 1000
-        chunksize = 256
+        p_chunksize = 256
     else:
         size = 2048  # 2048
         resolution = 250  # 250
-        chunksize = 512  # 256
+        p_chunksize = 512  # 256
     win = '1D'  # '1h' or '1D'
     #
     resultsdir = os.path.expanduser('~/results/radar-qpe-max')
@@ -44,7 +44,7 @@ if __name__ == '__main__':
         cachedir=cachedir,
         size=size,
         resolution=resolution,
-        chunksize=chunksize,
+        p_chunksize=p_chunksize,
     )
 
     # Combine rasters
@@ -52,7 +52,7 @@ if __name__ == '__main__':
         date, nod, cachedir=cachedir,
         size=size,
         resolution=resolution,
-        chunksize=chunksize,
+        p_chunksize=p_chunksize,
         ignore_cache=False,
     )
 
@@ -62,9 +62,9 @@ if __name__ == '__main__':
         cachedir=cachedir,
         size=size,
         resolution=resolution,
-        chunksize=chunksize,
+        p_chunksize=p_chunksize,
         win=win)
-    dat, dattime = aggmax(accfile, attrs, chunksize=chunksize)
+    dat, dattime = aggmax(accfile, attrs, p_chunksize=p_chunksize)
 
     # Process geotiff products
     write_max_tifs(dat, dattime, date, resultsdir=resultsdir, nod=nod, win=win,

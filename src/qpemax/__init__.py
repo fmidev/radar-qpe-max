@@ -62,8 +62,8 @@ ATTRS = {
         '_FillValue': UINT16_FILLVAL
     }
 }
-DEFAULT_CHUNKSIZE = 256
-ACC_CHUNKSIZE = 32
+DEFAULT_P_CHUNKSIZE = 256
+DEFAULT_ACC_CHUNKSIZE = 32
 DEFAULT_RESOLUTION = 250
 DEFAULT_XY_SIZE = 2048
 DEFAULT_CACHE_DIR = '/tmp/radar-qpe-max'
@@ -147,7 +147,7 @@ def save_precip_grid(
         radar: pyart.core.Radar, cachefile: str,
         tiffile: Optional[str] = None, size: int = DEFAULT_XY_SIZE,
         resolution: int = DEFAULT_RESOLUTION, scans_per_hour: int = 12,
-        blocksize: int = 512, chunksize: int = DEFAULT_CHUNKSIZE) -> None:
+        blocksize: int = 512, p_chunksize: int = DEFAULT_P_CHUNKSIZE) -> None:
     """Save precipitation products from Radar objects to files.
 
     Precipitation rate is saved to netcdf `cachefile`, and optionally per scan
@@ -170,7 +170,7 @@ def save_precip_grid(
     while retries < max_retries:
         try:
             encoding = DEFAULT_ENCODING.copy()
-            encoding[LWE]['chunksizes'] = (1, chunksize, chunksize)
+            encoding[LWE]['chunksizes'] = (1, p_chunksize, p_chunksize)
             rda.to_netcdf(cachefile, encoding=encoding, engine='h5netcdf')
             break
         except BlockingIOError as e:
@@ -212,7 +212,7 @@ def qpe_grid_caching(
         h5path: str, size: int, resolution: int,
         ignore_cache: bool = False, resultsdir: Optional[str] = None,
         cachedir: str = DEFAULT_CACHE_DIR, dbz_field: str = ZH,
-        chunksize: int = DEFAULT_CHUNKSIZE, **kws) -> str:
+        p_chunksize: int = DEFAULT_P_CHUNKSIZE, **kws) -> str:
     """Create precipitation grid cache file and optionally geotiff."""
     dset = 'dataset1' # lowest elevation
     corr = '_c' if 'C' in dbz_field else ''
@@ -227,7 +227,7 @@ def qpe_grid_caching(
         nod = get_nod(h5f)
     cachefname = QPE_CACHE_FMT.format(
         ts=ts, nod=nod, size=size, resolution=resolution, corr=corr,
-        chunksize=chunksize)
+        chunksize=p_chunksize)
     cachefile = os.path.join(cachedir, cachefname)
     if os.path.isfile(cachefile) and not ignore_cache:
         logger.info(f'Cache file {cachefile} exists.')
@@ -243,7 +243,7 @@ def qpe_grid_caching(
         tiffile = None
     z_r_qpe(radar, dbz_field=dbz_field)
     save_precip_grid(radar, cachefile, tiffile=tiffile, size=size,
-                     resolution=resolution, chunksize=chunksize, **kws)
+                     resolution=resolution, p_chunksize=p_chunksize, **kws)
     return nod
 
 
@@ -386,7 +386,7 @@ def generate_individual_rasters(
         h5paths: List[str], resultsdir: str, cachedir: str = DEFAULT_CACHE_DIR,
         size: int = DEFAULT_XY_SIZE,
         resolution: int = DEFAULT_RESOLUTION,
-        chunksize: int = DEFAULT_CHUNKSIZE,
+        p_chunksize: int = DEFAULT_P_CHUNKSIZE,
         ignore_cache: bool = False, dbz_field: str = ZH) -> str:
     """Generate individual precipitation rasters and return the nod."""
     tstep_guess = tstep_from_fpaths(h5paths)
@@ -398,7 +398,7 @@ def generate_individual_rasters(
             cachedir=cachedir,
             dbz_field=dbz_field,
             scans_per_hour=acc_scaling_guess,
-            chunksize=chunksize,
+            p_chunksize=p_chunksize,
         )
     return nod
 
@@ -406,7 +406,7 @@ def generate_individual_rasters(
 def combine_rasters(
         date: datetime.date, nod: str, cachedir: str = DEFAULT_CACHE_DIR,
         size: int = DEFAULT_XY_SIZE, resolution: int = DEFAULT_RESOLUTION,
-        chunksize: int = DEFAULT_CHUNKSIZE,
+        p_chunksize: int = DEFAULT_P_CHUNKSIZE,
         ignore_cache: bool = False,
         dbz_field: str = ZH) -> tuple[str, List[str]]:
     """Combine individual rasters into a single chunked netcdf file."""
@@ -417,7 +417,7 @@ def combine_rasters(
         size=size,
         resolution=resolution,
         corr=corr,
-        chunksize=chunksize,
+        chunksize=p_chunksize,
     )
     ncfile = QPE_CACHE_FMT.format(
         ts=date.strftime(DATEFMT),
@@ -425,28 +425,24 @@ def combine_rasters(
         size=size,
         resolution=resolution,
         corr=corr,
-        chunksize=chunksize,
+        chunksize=p_chunksize,
     )
     globfmt = os.path.join(cachedir, globfmt)
     ncfiles, ncfiles_obsolete = two_day_glob(date, globfmt=globfmt)
     ncpath = os.path.join(cachedir, ncfile)
-    ncfile = _combine_rds(ncfiles, ncpath, chunksize, ignore_cache)
+    ncfile = _combine_rds(ncfiles, ncpath, p_chunksize, ignore_cache)
     return ncfile, ncfiles_obsolete
 
 
-def acc_ch(chunksize: int) -> int:
-    """Choose accumulation chunksize."""
-    return min(chunksize, ACC_CHUNKSIZE)
-
-
-def _write_accums(accums, accumsfile, acc_chunk, ignore_cache=False):
+def _write_accums(accums, accumsfile, acc_chunksize: int,
+                  ignore_cache: bool = False):
     """Write accumulation dataset to file."""
     # check if the file exists already
     if os.path.isfile(accumsfile) and not ignore_cache:
         logger.info(f'File {accumsfile} exists.')
         return
     encoding = DEFAULT_ENCODING.copy()
-    encoding[LWE]['chunksizes'] = (accums.shape[0], acc_chunk, acc_chunk)
+    encoding[LWE]['chunksizes'] = (accums.shape[0], acc_chunksize, acc_chunksize)
     with ProgressLogging(logger, dt=5):
         accums.to_netcdf(accumsfile, encoding=encoding, engine='h5netcdf')
 
@@ -454,7 +450,8 @@ def _write_accums(accums, accumsfile, acc_chunk, ignore_cache=False):
 def accu(
         date: datetime.date, nod: str, cachedir: str = DEFAULT_CACHE_DIR,
         size: int = DEFAULT_XY_SIZE, resolution: int = DEFAULT_RESOLUTION,
-        chunksize: int = DEFAULT_CHUNKSIZE, dbz_field: str = ZH,
+        p_chunksize: int = DEFAULT_P_CHUNKSIZE,
+        acc_chunksize: int = DEFAULT_ACC_CHUNKSIZE, dbz_field: str = ZH,
         win: str = '1D', **kws):
     """Moving window maximum precipitation accumulation."""
     corr = '_c' if 'C' in dbz_field else ''
@@ -464,16 +461,15 @@ def accu(
         size=size,
         resolution=resolution,
         corr=corr,
-        chunksize=chunksize,
+        chunksize=p_chunksize,
     )
-    acc_chunk = acc_ch(chunksize)
     accfile = ACC_CACHE_FMT.format(
         ts=date.strftime(DATEFMT),
         nod=nod,
         size=size,
         resolution=resolution,
         corr=corr,
-        chunksize=acc_chunk,
+        chunksize=acc_chunksize,
         win=win,
     ).lower()
     ncpath = os.path.join(cachedir, ncfile)
@@ -495,11 +491,12 @@ def accu(
         rollsel[LWE].rolling({'time': iwin}).sum() / acc_scaling
     )
     logger.info(f'Processing accumulation dataset to {accpath}')
-    _write_accums(accums, accpath, acc_chunk, **kws)
+    _write_accums(accums, accpath, acc_chunksize, **kws)
     return accpath, rds.attrs
 
 
-def aggmax(accfile: str, attrs, chunksize: int = DEFAULT_CHUNKSIZE) -> tuple[xr.DataArray, xr.DataArray]:
+def aggmax(accfile: str, attrs, p_chunksize: int = DEFAULT_P_CHUNKSIZE,
+           acc_chunksize: int = DEFAULT_ACC_CHUNKSIZE) -> tuple[xr.DataArray, xr.DataArray]:
     logger.info('Loading accumulation dataset.')
     accums = xr.open_dataarray(accfile, engine='h5netcdf', chunks={})
     accums = accums.convert_calendar(calendar='standard', use_cftime=True)
@@ -508,14 +505,14 @@ def aggmax(accfile: str, attrs, chunksize: int = DEFAULT_CHUNKSIZE) -> tuple[xr.
     dattime = accums.idxmax(dim='time', keep_attrs=True).rio.write_crs(EPSG_TARGET)
     dat = _write_dat_attrs(dat, attrs)
     dattime = _write_dattime_attrs(dattime, attrs)
-    acc_chunk = acc_ch(chunksize)
-    dattime = dattime.chunk((acc_chunk, acc_chunk))
+    dattime = dattime.chunk((acc_chunksize, acc_chunksize))
     logger.debug('aggmax returns')
     return dat, dattime
 
 
 def write_max_tifs(
-        dat: xr.DataArray, dattime: xr.DataArray, date: datetime.date, resultsdir: str, nod: str, win: str, corr: str = '',
+        dat: xr.DataArray, dattime: xr.DataArray, date: datetime.date,
+        resultsdir: str, nod: str, win: str, corr: str = '',
         size: int = DEFAULT_XY_SIZE,
         resolution: int = DEFAULT_RESOLUTION) -> None:
     win = win.lower()
