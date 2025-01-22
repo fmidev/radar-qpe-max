@@ -26,6 +26,7 @@ dependencies = [
   "psutil",
   "rioxarray",
   "radproc[arm] @ git+https://github.com/fmidev/radproc",
+  "distributed",
   "flox", # not a hard dependency
 ]
 dynamic = ["version"]
