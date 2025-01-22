@@ -452,8 +452,11 @@ def accu(
         size: int = DEFAULT_XY_SIZE, resolution: int = DEFAULT_RESOLUTION,
         p_chunksize: int = DEFAULT_P_CHUNKSIZE,
         acc_chunksize: int = DEFAULT_ACC_CHUNKSIZE, dbz_field: str = ZH,
-        win: str = '1D', **kws):
+        win: str = '1D', ignore_cache: bool = False, **kws):
     """Moving window maximum precipitation accumulation."""
+    from dask.distributed import Client
+    client = Client(**kws)
+    logger.info(client.dashboard_link)
     corr = '_c' if 'C' in dbz_field else ''
     ncfile = QPE_CACHE_FMT.format(
         ts=date.strftime(DATEFMT),
@@ -491,7 +494,7 @@ def accu(
         rollsel[LWE].rolling({'time': iwin}).sum() / acc_scaling
     )
     logger.info(f'Processing accumulation dataset to {accpath}')
-    _write_accums(accums, accpath, acc_chunksize, **kws)
+    _write_accums(accums, accpath, acc_chunksize, ignore_cache=ignore_cache)
     return accpath, rds.attrs
 
 
