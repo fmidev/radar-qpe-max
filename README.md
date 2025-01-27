@@ -14,13 +14,8 @@ pip install .
 ```
 
 ## Usage
-see
+Only a python module API is currently available in version 2.x. For a command line interface, please refer to version 1.4.5, which is the latest minor release of the 1.x version.
 
-```shell
-qpe --help
-```
-
-Container example:
-```shell
-podman run --rm -v=$HOME/data/polar/fivih/:/data:z -v=$HOME/results/radar-qpe-max/:/output:z --tmpfs=/tmp quay.io/fmi/sademaksit:v1.1.0 winmax -i /data/{date}*.h5 -o /output -s 512 -w 1H 20220805
+```python
+import qpemax
 ```
