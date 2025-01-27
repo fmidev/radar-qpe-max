@@ -63,6 +63,7 @@ if __name__ == '__main__':
         size=size,
         resolution=resolution,
         p_chunksize=p_chunksize,
+        ignore_cache=True,
         win=win)
     dat, dattime = aggmax(accfile, attrs, p_chunksize=p_chunksize)
 

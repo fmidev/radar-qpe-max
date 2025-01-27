@@ -442,7 +442,8 @@ def _write_accums(accums, accumsfile, acc_chunksize: int,
         logger.info(f'File {accumsfile} exists.')
         return
     encoding = DEFAULT_ENCODING.copy()
-    encoding[LWE]['chunksizes'] = (accums.shape[0], acc_chunksize, acc_chunksize)
+    encoding[LWE]['chunksizes'] = (
+        accums.shape[0], acc_chunksize, acc_chunksize)
     with ProgressLogging(logger, dt=5):
         accums.to_netcdf(accumsfile, encoding=encoding, engine='h5netcdf')
 
@@ -453,7 +454,7 @@ def accu(
         p_chunksize: int = DEFAULT_P_CHUNKSIZE,
         acc_chunksize: int = DEFAULT_ACC_CHUNKSIZE, dbz_field: str = ZH,
         win: str = '1D', **kws):
-    """Moving window maximum precipitation accumulation."""
+    """Rolling window precipitation accumulation."""
     corr = '_c' if 'C' in dbz_field else ''
     ncfile = QPE_CACHE_FMT.format(
         ts=date.strftime(DATEFMT),
@@ -495,18 +496,22 @@ def accu(
     return accpath, rds.attrs
 
 
-def aggmax(accfile: str, attrs, p_chunksize: int = DEFAULT_P_CHUNKSIZE,
-           acc_chunksize: int = DEFAULT_ACC_CHUNKSIZE) -> tuple[xr.DataArray, xr.DataArray]:
+def aggmax(
+        accfile: str, attrs, p_chunksize: int = DEFAULT_P_CHUNKSIZE,
+        acc_chunksize: int = DEFAULT_ACC_CHUNKSIZE
+    ) -> tuple[xr.DataArray, xr.DataArray]:
+    """maximum precipitation accumulation for each pixel"""
     logger.info('Loading accumulation dataset.')
     accums = xr.open_dataarray(accfile, engine='h5netcdf', chunks={})
     accums = accums.convert_calendar(calendar='standard', use_cftime=True)
     accums = accums.rename(ACC)
     dat = accums.max('time').rio.write_crs(EPSG_TARGET)
-    dattime = accums.idxmax(dim='time', keep_attrs=True).rio.write_crs(EPSG_TARGET)
+    dattime = accums.idxmax(
+        dim='time', keep_attrs=True
+    ).rio.write_crs(EPSG_TARGET)
     dat = _write_dat_attrs(dat, attrs)
     dattime = _write_dattime_attrs(dattime, attrs)
     dattime = dattime.chunk((acc_chunksize, acc_chunksize))
-    logger.debug('aggmax returns')
     return dat, dattime
 
 
@@ -515,6 +520,7 @@ def write_max_tifs(
         resultsdir: str, nod: str, win: str, corr: str = '',
         size: int = DEFAULT_XY_SIZE,
         resolution: int = DEFAULT_RESOLUTION) -> None:
+    """Write maximum precipitation accumulation and time to geotiffs."""
     win = win.lower()
     tstamp = date.strftime(DATEFMT)
     tifp = os.path.join(
