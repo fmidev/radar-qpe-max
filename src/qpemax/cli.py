@@ -5,7 +5,16 @@ import json
 
 import click
 
-from qpemax import DATEFMT, DEFAULT_CACHE_DIR, two_day_glob, accu, qpe_grid_caching, __version__
+from qpemax import (
+    DATEFMT, DEFAULT_CACHE_DIR,
+    two_day_glob,
+    accu,
+    qpe_grid_caching,
+    generate_individual_rasters,
+    combine_rasters,
+    aggmax,
+    write_max_tifs,
+    __version__)
 from qpemax.logs import streamlogger_setup
 
 
@@ -74,7 +83,9 @@ def grid(h5file, size, resolution, force, tif_dir, out_dir, dbz_field):
 @click.option('-w', '--window', metavar='WIN', help='length of the time window, e.g. 1D for 1 day', default='1 D')
 @click.option('-z', '--dbz-field', metavar='FIELD', help='use FIELD for DBZ', default='DBZH')
 @click.option('-l', '--list-obsolete', is_flag=True, help='json list of obsolete cache files')
-def winmax(yyyymmdd, input_glob, output_dir, cache_dir, size, chunksize, resolution, dbz_field, window, list_obsolete):
+def winmax(
+        yyyymmdd, input_glob, output_dir, cache_dir, size, chunksize,
+        resolution, dbz_field, window, list_obsolete):
     """Maximum precipitation accumulation over moving temporal window.
 
     YYYYMMDD is the date over which the end of the time window moves."""
@@ -86,16 +97,23 @@ def winmax(yyyymmdd, input_glob, output_dir, cache_dir, size, chunksize, resolut
         resolution = autoresolution(size)
     date = datetime.datetime.strptime(yyyymmdd, DATEFMT)
     h5paths, _ = two_day_glob(date, globfmt=input_glob)
-    nc_obsolete = accu(
-        date,
-        h5paths,
-        output_dir,
-        cachedir=cache_dir,
-        size=size,
-        p_chunksize=chunksize,
-        resolution=resolution,
-        dbz_field=dbz_field,
-        win=window
+    nod = generate_individual_rasters(
+        h5paths, resultsdir=output_dir, cachedir=cache_dir,
+        size=size, resolution=resolution, p_chunksize=chunksize,
+        dbz_field=dbz_field
+    )
+    _, nc_obsolete = combine_rasters(
+        date, nod, cachedir=cache_dir, size=size, resolution=resolution,
+        p_chunksize=chunksize, dbz_field=dbz_field
+    )
+    accfile, attrs = accu(
+        date, nod, cachedir=cache_dir, size=size, resolution=resolution,
+        p_chunksize=chunksize, win=window, dbz_field=dbz_field
+    )
+    dat, dattime = aggmax(accfile, attrs, p_chunksize=chunksize)
+    write_max_tifs(
+        dat, dattime, date, resultsdir=output_dir, nod=nod, win=window,
+        size=size, resolution=resolution
     )
     if list_obsolete:
         print(json.dumps(nc_obsolete))

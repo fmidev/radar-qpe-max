@@ -38,6 +38,8 @@ if __name__ == '__main__':
     cachedir = os.path.expanduser('~/.cache/radar-qpe-max')
     # size 1024 or 2048 can still be run on a laptop with chunksize 256
 
+    dbz_field = 'DBZH'  # Set the dbz_field here
+
     # Generate individual rasters
     nod = generate_individual_rasters(
         h5paths, resultsdir,
@@ -45,6 +47,7 @@ if __name__ == '__main__':
         size=size,
         resolution=resolution,
         p_chunksize=p_chunksize,
+        dbz_field=dbz_field
     )
 
     # Combine rasters
@@ -54,6 +57,7 @@ if __name__ == '__main__':
         resolution=resolution,
         p_chunksize=p_chunksize,
         ignore_cache=False,
+        dbz_field=dbz_field
     )
 
     # maximum precipitation accumulation logic
@@ -64,7 +68,9 @@ if __name__ == '__main__':
         resolution=resolution,
         p_chunksize=p_chunksize,
         ignore_cache=True,
-        win=win)
+        win=win,
+        dbz_field=dbz_field
+    )
     dat, dattime = aggmax(accfile, attrs, p_chunksize=p_chunksize)
 
     # Process geotiff products
