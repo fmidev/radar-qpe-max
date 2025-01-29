@@ -14,8 +14,14 @@ pip install .
 ```
 
 ## Usage
-Only a python module API is currently available in version 2.x. For a command line interface, please refer to version 1.4.5, which is the latest minor release of the 1.x version.
+Python module API:
 
 ```python
 import qpemax
+```
+
+Command line interface:
+
+```shell
+qpe --help
 ```
