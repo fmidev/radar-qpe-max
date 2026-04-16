@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "qpemax"
 description = 'QPE statistical indicators over moving temporal windows'
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.14"
 license = "MIT"
 keywords = ['radar', 'precipitation']
 authors = [
@@ -15,10 +15,7 @@ authors = [
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Programming Language :: Python",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: 3.12",
-  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
@@ -54,7 +51,7 @@ cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=qpemax
 no-cov = "cov --no-cov {args}"
 
 [[tool.hatch.envs.test.matrix]]
-python = ["310", "311", "312", "313"]
+python = ["314"]
 
 [tool.coverage.run]
 branch = true
