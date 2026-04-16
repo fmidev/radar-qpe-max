@@ -3,6 +3,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Container / CI
+Containerfile
+.dockerignore
+AGENTS.md
+tests/
+
 # C extensions
 *.so
 

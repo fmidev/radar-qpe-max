@@ -1,10 +1,24 @@
-FROM python:3.12
+FROM python:3.14-slim AS builder
 
-WORKDIR /usr/src/app
-
+WORKDIR /build
 COPY . .
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git gcc g++ libproj-dev libgeos-dev \
+    && rm -rf /var/lib/apt/lists/*
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install build && python -m build --wheel
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip wheel --wheel-dir /build/wheels /build/dist/*.whl
 
-RUN pip install -U pip && pip install --no-cache-dir .
+FROM python:3.14-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libproj25 libgeos-c1v5 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /build/wheels/ /tmp/wheels/
+RUN pip install --no-index --no-deps /tmp/wheels/*.whl \
+    && rm -rf /tmp/wheels/
 
 ENV PYART_QUIET=1
 
