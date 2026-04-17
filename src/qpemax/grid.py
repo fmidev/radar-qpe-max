@@ -23,9 +23,9 @@ from qpemax._version import __version__
 from qpemax.constants import (
     ATTRS, COG_COMPRESS, DEFAULT_CACHE_DIR, DEFAULT_P_CHUNKSIZE,
     DEFAULT_RESOLUTION, DEFAULT_XY_SIZE, DEFAULT_ENCODING, EPSG_TARGET,
-    LWE_SCALE_FACTOR, QPE_TIF_FMT, SINGLE_SCAN_SUBDIR, ZH, ACC,
+    LWE_SCALE_FACTOR, QPE_CACHE_FMT, QPE_TIF_FMT, SINGLE_SCAN_SUBDIR, ZH, ACC,
 )
-from qpemax.utils import corr_suffix, qpe_cache_fname
+from qpemax.utils import corr_suffix
 
 
 logger = logging.getLogger('airflow.task')
@@ -198,8 +198,9 @@ def qpe_grid_caching(
         t = sweep_start_datetime(h5f, f'/{dset}')
         ts = t.strftime('%Y%m%d%H%M')
         nod = get_nod(h5f)
-    cachefile = os.path.join(
-        cachedir, qpe_cache_fname(ts, nod, size, resolution, corr, p_chunksize))
+    cachefile = os.path.join(cachedir, QPE_CACHE_FMT.format(
+        ts=ts, nod=nod, size=size, resolution=resolution, corr=corr,
+        chunksize=p_chunksize))
     if os.path.isfile(cachefile) and not ignore_cache:
         logger.info(f'Cache file {cachefile} exists.')
         return nod

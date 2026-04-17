@@ -25,10 +25,7 @@ from qpemax.constants import (
     UINT16_FILLVAL,
     ZH,
 )
-from qpemax.utils import (
-    two_day_glob, tstep_from_fpaths,
-    corr_suffix, qpe_cache_fname, acc_cache_fname,
-)
+from qpemax.utils import two_day_glob, tstep_from_fpaths, corr_suffix, acc_cache_fname
 from qpemax.grid import (
     basic_gatefilter,
     create_grid,
@@ -57,7 +54,7 @@ __all__ = [
     'QPE_TIF_FMT', 'SINGLE_SCAN_SUBDIR', 'UINT16_FILLVAL', 'ZH',
     # utils
     'two_day_glob', 'tstep_from_fpaths',
-    'corr_suffix', 'qpe_cache_fname', 'acc_cache_fname',
+    'corr_suffix', 'acc_cache_fname',
     # grid
     'basic_gatefilter', 'create_grid', 'generate_individual_rasters',
     'get_nod', 'qpe_grid_caching', 'read_odim_h5', 'save_precip_grid',

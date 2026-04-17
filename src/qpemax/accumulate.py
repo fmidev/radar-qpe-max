@@ -16,9 +16,9 @@ from qpemax.callbacks import ProgressLogging
 from qpemax.constants import (
     ACC, DATEFMT, DEFAULT_ACC_CHUNKSIZE, DEFAULT_CACHE_DIR,
     DEFAULT_ENCODING, DEFAULT_P_CHUNKSIZE, DEFAULT_RESOLUTION, DEFAULT_XY_SIZE,
-    EPSG_TARGET, ZH,
+    EPSG_TARGET, QPE_CACHE_FMT, ZH,
 )
-from qpemax.utils import acc_cache_fname, corr_suffix, qpe_cache_fname
+from qpemax.utils import acc_cache_fname, corr_suffix
 
 
 logger = logging.getLogger('airflow.task')
@@ -75,10 +75,12 @@ def combine_rasters(
     """Combine individual rasters into a single chunked netcdf file."""
     from qpemax.utils import two_day_glob
     corr = corr_suffix(dbz_field)
-    globfmt = os.path.join(
-        cachedir, qpe_cache_fname('{date}????', nod, size, resolution, corr, p_chunksize))
-    ncpath = os.path.join(
-        cachedir, qpe_cache_fname(date.strftime(DATEFMT), nod, size, resolution, corr, p_chunksize))
+    globfmt = os.path.join(cachedir, QPE_CACHE_FMT.format(
+        ts='{date}????', nod=nod, size=size, resolution=resolution,
+        corr=corr, chunksize=p_chunksize))
+    ncpath = os.path.join(cachedir, QPE_CACHE_FMT.format(
+        ts=date.strftime(DATEFMT), nod=nod, size=size, resolution=resolution,
+        corr=corr, chunksize=p_chunksize))
     ncfiles, ncfiles_obsolete = two_day_glob(date, globfmt=globfmt)
     ncfile = _combine_rds(ncfiles, ncpath, p_chunksize, ignore_cache)
     return ncfile, ncfiles_obsolete
@@ -129,8 +131,9 @@ def accu(
         win: str = '1D', **kws):
     """Rolling window precipitation accumulation."""
     corr = corr_suffix(dbz_field)
-    ncpath = os.path.join(
-        cachedir, qpe_cache_fname(date.strftime(DATEFMT), nod, size, resolution, corr, p_chunksize))
+    ncpath = os.path.join(cachedir, QPE_CACHE_FMT.format(
+        ts=date.strftime(DATEFMT), nod=nod, size=size, resolution=resolution,
+        corr=corr, chunksize=p_chunksize))
     accpath = os.path.join(
         cachedir, acc_cache_fname(date, nod, size, resolution, corr, acc_chunksize, win))
     rds = load_chunked_dataset(ncpath)

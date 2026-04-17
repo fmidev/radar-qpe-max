@@ -6,7 +6,7 @@ import pyart
 import xarray as xr
 
 from qpemax import basic_gatefilter, ZH, tstep_from_fpaths
-from qpemax.utils import acc_cache_fname, corr_suffix, qpe_cache_fname
+from qpemax.utils import acc_cache_fname, corr_suffix
 from qpemax.grid import _grid_to_dataset
 from qpemax.accumulate import _accu_time_bounds
 
@@ -50,13 +50,6 @@ def test_tstep_from_fpaths():
 def test_corr_suffix():
     assert corr_suffix('DBZH') == ''
     assert corr_suffix('DBZHC') == '_c'
-
-
-def test_qpe_cache_fname():
-    fname = qpe_cache_fname('202405281100', 'filuo', 2048, 250, '', 512)
-    assert fname == '202405281100filuo2048px250m512ch.nc'
-    fname_corr = qpe_cache_fname('202405281100', 'filuo', 2048, 250, '_c', 512)
-    assert fname_corr == '202405281100filuo2048px250m_c512ch.nc'
 
 
 def test_acc_cache_fname():

@@ -28,8 +28,9 @@ hatch run no-cov
 ## Code Style
 
 * **Python ≥ 3.14**: use modern syntax freely (e.g. `X | Y` unions, `list[X]`/`dict[K, V]` generics, `type` aliases)
-* **Formatter: [Black](https://black.readthedocs.io/)** (default line length: 88).
-* **Type hints**: Use the most modern convention supported.
+* **Formatter: [Black](https://black.readthedocs.io/)** (default line length: 88)
+* **Type hints**: Use the most modern convention supported
+* Avoid trivial functions
 * Succinct, to the point documentation
 
 ### Import grouping
