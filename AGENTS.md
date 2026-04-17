@@ -9,6 +9,9 @@ CLI entry point: `qpe` (subcommands: `grid`, `winmax`). See [README.md](README.m
 ## Commands
 
 ```sh
+# Activate virtualenv
+/home/tiira/.virtualenvs/qpemax/bin/activate
+
 # Install
 pip install .
 
@@ -17,6 +20,9 @@ hatch run cov
 
 # Run tests without coverage
 hatch run no-cov
+
+# Run the main program
+/home/tiira/.virtualenvs/qpemax/bin/qpe
 ```
 
 ## Code Style
