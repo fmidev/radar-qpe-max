@@ -10,10 +10,33 @@ from typing import List
 
 import pandas as pd
 
-from qpemax.constants import DATEFMT
+from qpemax.constants import ACC_CACHE_FMT, DATEFMT, QPE_CACHE_FMT
 
 
 logger = logging.getLogger('airflow.task')
+
+
+def corr_suffix(dbz_field: str) -> str:
+    """Return attenuation-correction suffix for filenames."""
+    return '_c' if 'C' in dbz_field else ''
+
+
+def qpe_cache_fname(
+        ts: str, nod: str, size: int, resolution: int,
+        corr: str, p_chunksize: int) -> str:
+    """Build QPE cache netCDF filename (basename only)."""
+    return QPE_CACHE_FMT.format(
+        ts=ts, nod=nod, size=size, resolution=resolution,
+        corr=corr, chunksize=p_chunksize)
+
+
+def acc_cache_fname(
+        date: datetime.date, nod: str, size: int, resolution: int,
+        corr: str, acc_chunksize: int, win: str) -> str:
+    """Build accumulation cache netCDF filename (basename only)."""
+    return ACC_CACHE_FMT.format(
+        ts=date.strftime(DATEFMT), nod=nod, size=size, resolution=resolution,
+        corr=corr, chunksize=acc_chunksize, win=win).lower()
 
 
 def two_day_glob(

@@ -23,9 +23,9 @@ from qpemax._version import __version__
 from qpemax.constants import (
     ATTRS, COG_COMPRESS, DEFAULT_CACHE_DIR, DEFAULT_P_CHUNKSIZE,
     DEFAULT_RESOLUTION, DEFAULT_XY_SIZE, DEFAULT_ENCODING, EPSG_TARGET,
-    LWE_SCALE_FACTOR, QPE_CACHE_FMT, QPE_TIF_FMT, SINGLE_SCAN_SUBDIR, ZH,
-    ACC,
+    LWE_SCALE_FACTOR, QPE_TIF_FMT, SINGLE_SCAN_SUBDIR, ZH, ACC,
 )
+from qpemax.utils import corr_suffix, qpe_cache_fname
 
 
 logger = logging.getLogger('airflow.task')
@@ -101,16 +101,11 @@ def create_grid(
     return grid
 
 
-def save_precip_grid(
-        radar: pyart.core.Radar, cachefile: str,
-        tiffile: Optional[str] = None, size: int = DEFAULT_XY_SIZE,
-        resolution: int = DEFAULT_RESOLUTION, scans_per_hour: int = 12,
-        blocksize: int = 512, p_chunksize: int = DEFAULT_P_CHUNKSIZE) -> None:
-    """Save precipitation products from Radar objects to files.
-
-    Precipitation rate is saved to netcdf `cachefile`, and optionally per scan
-    accumulation to `tiffile`."""
-    grid = create_grid(radar, size=size, resolution=resolution)
+def _grid_to_dataset(
+        radar: pyart.core.Radar,
+        grid: pyart.core.Grid) -> 'xr.Dataset':
+    """Convert a pyart Grid to a labelled xarray Dataset with CRS and metadata."""
+    import xarray as xr
     rds = grid.to_xarray().isel(z=0).reset_coords(drop=True)
     rda = rds[LWE].fillna(0)
     rda.rio.write_crs(EPSG_TARGET, inplace=True)
@@ -122,6 +117,20 @@ def save_precip_grid(
         logger.warning('No source metadata found.')
     # TODO: retain existing history if any
     rda.attrs.update({'history': __version__})
+    return rda
+
+
+def save_precip_grid(
+        radar: pyart.core.Radar, cachefile: str,
+        tiffile: Optional[str] = None, size: int = DEFAULT_XY_SIZE,
+        resolution: int = DEFAULT_RESOLUTION, scans_per_hour: int = 12,
+        blocksize: int = 512, p_chunksize: int = DEFAULT_P_CHUNKSIZE) -> None:
+    """Save precipitation products from Radar objects to files.
+
+    Precipitation rate is saved to netcdf `cachefile`, and optionally per scan
+    accumulation to `tiffile`."""
+    grid = create_grid(radar, size=size, resolution=resolution)
+    rda = _grid_to_dataset(radar, grid)
     # netcdf4 engine causes HDF error on some machines
     max_retries = 3
     retries = 0
@@ -179,7 +188,7 @@ def qpe_grid_caching(
         p_chunksize: int = DEFAULT_P_CHUNKSIZE, **kws) -> str:
     """Create precipitation grid cache file and optionally geotiff."""
     dset = 'dataset1' # lowest elevation
-    corr = '_c' if 'C' in dbz_field else ''
+    corr = corr_suffix(dbz_field)
     if isinstance(resultsdir, str):
         tifdir = os.path.join(resultsdir, SINGLE_SCAN_SUBDIR)
         os.makedirs(tifdir, exist_ok=True)
@@ -189,10 +198,8 @@ def qpe_grid_caching(
         t = sweep_start_datetime(h5f, f'/{dset}')
         ts = t.strftime('%Y%m%d%H%M')
         nod = get_nod(h5f)
-    cachefname = QPE_CACHE_FMT.format(
-        ts=ts, nod=nod, size=size, resolution=resolution, corr=corr,
-        chunksize=p_chunksize)
-    cachefile = os.path.join(cachedir, cachefname)
+    cachefile = os.path.join(
+        cachedir, qpe_cache_fname(ts, nod, size, resolution, corr, p_chunksize))
     if os.path.isfile(cachefile) and not ignore_cache:
         logger.info(f'Cache file {cachefile} exists.')
         return nod

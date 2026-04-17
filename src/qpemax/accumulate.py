@@ -14,10 +14,11 @@ from radproc.aliases.fmi import LWE
 
 from qpemax.callbacks import ProgressLogging
 from qpemax.constants import (
-    ACC, ACC_CACHE_FMT, DATEFMT, DEFAULT_ACC_CHUNKSIZE, DEFAULT_CACHE_DIR,
+    ACC, DATEFMT, DEFAULT_ACC_CHUNKSIZE, DEFAULT_CACHE_DIR,
     DEFAULT_ENCODING, DEFAULT_P_CHUNKSIZE, DEFAULT_RESOLUTION, DEFAULT_XY_SIZE,
-    EPSG_TARGET, QPE_CACHE_FMT, ZH,
+    EPSG_TARGET, ZH,
 )
+from qpemax.utils import acc_cache_fname, corr_suffix, qpe_cache_fname
 
 
 logger = logging.getLogger('airflow.task')
@@ -73,28 +74,37 @@ def combine_rasters(
         dbz_field: str = ZH) -> tuple[str, List[str]]:
     """Combine individual rasters into a single chunked netcdf file."""
     from qpemax.utils import two_day_glob
-    corr = '_c' if 'C' in dbz_field else '' # mark attenuation correction
-    globfmt = QPE_CACHE_FMT.format(
-        ts='{date}????',
-        nod=nod,
-        size=size,
-        resolution=resolution,
-        corr=corr,
-        chunksize=p_chunksize,
-    )
-    ncfile = QPE_CACHE_FMT.format(
-        ts=date.strftime(DATEFMT),
-        nod=nod,
-        size=size,
-        resolution=resolution,
-        corr=corr,
-        chunksize=p_chunksize,
-    )
-    globfmt = os.path.join(cachedir, globfmt)
+    corr = corr_suffix(dbz_field)
+    globfmt = os.path.join(
+        cachedir, qpe_cache_fname('{date}????', nod, size, resolution, corr, p_chunksize))
+    ncpath = os.path.join(
+        cachedir, qpe_cache_fname(date.strftime(DATEFMT), nod, size, resolution, corr, p_chunksize))
     ncfiles, ncfiles_obsolete = two_day_glob(date, globfmt=globfmt)
-    ncpath = os.path.join(cachedir, ncfile)
     ncfile = _combine_rds(ncfiles, ncpath, p_chunksize, ignore_cache)
     return ncfile, ncfiles_obsolete
+
+
+def _accu_time_bounds(
+        rds: 'xr.Dataset', date: datetime.date, win: str,
+    ) -> tuple[pd.Timestamp, pd.Timestamp, int, pd.Timedelta]:
+    """Compute rolling-window time bounds and step size for accumulation.
+
+    Returns (tstep_pre, tstep_last, iwin, tdelta) where:
+      tstep_pre  — first timestep needed to fill the window ending at date
+      tstep_last — last timestep of date
+      iwin       — number of timesteps per window
+      tdelta     — dataset timestep length
+    """
+    win_trim = win.replace(' ', '')
+    # number of timesteps in window (e.g. 288 5min steps in a day)
+    iwin = rds.time.groupby(rds.time.dt.floor(win_trim)).sizes['time']
+    dwin = pd.to_timedelta(win)
+    tind = rds.indexes['time']
+    # timestep length as timedelta
+    tdelta = pd.to_timedelta(tind.freq) or pd.Series(tind).diff().median()
+    tstep_last = pd.to_datetime(date + datetime.timedelta(days=1)) - tdelta
+    tstep_pre = pd.to_datetime(date) - dwin + tdelta
+    return tstep_pre, tstep_last, iwin, tdelta
 
 
 def _write_accums(accums, accumsfile, acc_chunksize: int,
@@ -118,36 +128,13 @@ def accu(
         acc_chunksize: int = DEFAULT_ACC_CHUNKSIZE, dbz_field: str = ZH,
         win: str = '1D', **kws):
     """Rolling window precipitation accumulation."""
-    corr = '_c' if 'C' in dbz_field else ''
-    ncfile = QPE_CACHE_FMT.format(
-        ts=date.strftime(DATEFMT),
-        nod=nod,
-        size=size,
-        resolution=resolution,
-        corr=corr,
-        chunksize=p_chunksize,
-    )
-    accfile = ACC_CACHE_FMT.format(
-        ts=date.strftime(DATEFMT),
-        nod=nod,
-        size=size,
-        resolution=resolution,
-        corr=corr,
-        chunksize=acc_chunksize,
-        win=win,
-    ).lower()
-    ncpath = os.path.join(cachedir, ncfile)
-    accpath = os.path.join(cachedir, accfile)
+    corr = corr_suffix(dbz_field)
+    ncpath = os.path.join(
+        cachedir, qpe_cache_fname(date.strftime(DATEFMT), nod, size, resolution, corr, p_chunksize))
+    accpath = os.path.join(
+        cachedir, acc_cache_fname(date, nod, size, resolution, corr, acc_chunksize, win))
     rds = load_chunked_dataset(ncpath)
-    win_trim = win.replace(' ', '')
-    # number of timesteps in window (e.g. 288 5min steps in a day)
-    iwin = rds.time.groupby(rds.time.dt.floor(win_trim)).sizes['time']
-    dwin = pd.to_timedelta(win)
-    tind = rds.indexes['time']
-    # timestep length as timedelta
-    tdelta = pd.to_timedelta(tind.freq) or pd.Series(tind).diff().median()
-    tstep_last = pd.to_datetime(date + datetime.timedelta(days=1)) - tdelta
-    tstep_pre = pd.to_datetime(date) - dwin + tdelta
+    tstep_pre, tstep_last, iwin, tdelta = _accu_time_bounds(rds, date, win)
     rollsel = rds.sel(time=slice(tstep_pre, tstep_last))
     # The data is still precip rate, so scale to mm
     acc_scaling = datetime.timedelta(hours=1) / tdelta # 12 for 5min steps
