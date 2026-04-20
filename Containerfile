@@ -1,21 +1,38 @@
+# Containerfile for qpemax - QPE statistical indicators over moving temporal windows
+
 FROM python:3.14-slim AS builder
 
-WORKDIR /build
-COPY . .
+# Install build dependencies (C extensions needed for dep pre-compilation)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git gcc g++ libproj-dev libgeos-dev \
     && rm -rf /var/lib/apt/lists/*
-RUN pip install build && python -m build --wheel
+
+WORKDIR /build
+
+RUN pip install --no-cache-dir hatch hatch-vcs
+
+# Copy source for building (include .git for hatch-vcs versioning)
+COPY pyproject.toml README.md LICENSE ./
+COPY src/ src/
+COPY .git/ .git/
+
+# Build project wheel and pre-compile all dependencies
+RUN hatch build -t wheel
 RUN pip wheel --wheel-dir /build/wheels /build/dist/*.whl
 
+
 FROM python:3.14-slim
+
+LABEL org.opencontainers.image.title="sademaksit"
+LABEL org.opencontainers.image.description="QPE statistical indicators over moving temporal windows"
+LABEL org.opencontainers.image.source="https://github.com/fmidev/radar-qpe-max"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libproj25 libgeos-c1v5 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /build/wheels/ /tmp/wheels/
-RUN pip install --no-index --no-deps /tmp/wheels/*.whl \
+RUN pip install --no-cache-dir --no-index /tmp/wheels/*.whl \
     && rm -rf /tmp/wheels/
 
 ENV PYART_QUIET=1
