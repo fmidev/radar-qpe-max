@@ -2,24 +2,27 @@
 
 FROM python:3.14-slim AS builder
 
-# Install build dependencies (C extensions needed for dep pre-compilation)
+# Build-time system deps (git for hatch-vcs + git+https deps; compilers/headers
+# for any C extensions that lack matching manylinux wheels).
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git gcc g++ libproj-dev libgeos-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Isolated venv we can copy verbatim into the runtime stage.
+RUN python -m venv /opt/venv
+ENV PATH=/opt/venv/bin:$PATH \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
 WORKDIR /build
 
-RUN pip install --no-cache-dir hatch hatch-vcs
-
-# Copy source for building (include .git for hatch-vcs versioning)
+# Copy source (include .git so hatch-vcs can derive the version).
 COPY pyproject.toml README.md LICENSE ./
 COPY src/ src/
 COPY .git/ .git/
 
-# Build project wheel and pre-compile all dependencies
-# hatchling included so the final stage can build radproc from its git+ URL
-RUN hatch build -t wheel
-RUN pip wheel --wheel-dir /build/wheels hatchling hatch-vcs /build/dist/*.whl
+# Install the project and all its runtime dependencies into /opt/venv.
+RUN pip install .
 
 
 FROM python:3.14-slim
@@ -28,14 +31,13 @@ LABEL org.opencontainers.image.title="sademaksit"
 LABEL org.opencontainers.image.description="QPE statistical indicators over moving temporal windows"
 LABEL org.opencontainers.image.source="https://github.com/fmidev/radar-qpe-max"
 
+# Runtime shared libraries only (no compilers, no git).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        git libproj25 libgeos-c1v5 \
+        libproj25 libgeos-c1v5 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /build/wheels/ /tmp/wheels/
-RUN pip install --no-cache-dir --no-index --find-links /tmp/wheels/ qpemax \
-    && rm -rf /tmp/wheels/
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH=/opt/venv/bin:$PATH \
+    PYART_QUIET=1
 
-ENV PYART_QUIET=1
-
-ENTRYPOINT ["/usr/local/bin/qpe"]
+ENTRYPOINT ["qpe"]

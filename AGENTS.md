@@ -15,6 +15,9 @@ CLI entry point: `qpe` (subcommands: `grid`, `winmax`). See [README.md](README.m
 # Install
 pip install .
 
+# Build container
+podman build -t qpemax .
+
 # Run tests with coverage
 hatch run cov
 
