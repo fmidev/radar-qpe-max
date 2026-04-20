@@ -4,8 +4,6 @@ __pycache__/
 *$py.class
 
 # Container / CI
-Containerfile
-.dockerignore
 AGENTS.md
 tests/
 
@@ -133,7 +131,4 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
-
-# docker meta
-Dockerfile
 
