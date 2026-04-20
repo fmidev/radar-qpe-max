@@ -32,7 +32,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /build/wheels/ /tmp/wheels/
-RUN pip install --no-cache-dir --no-index /tmp/wheels/*.whl \
+RUN pip install --no-cache-dir --no-deps /tmp/wheels/*.whl \
     && rm -rf /tmp/wheels/
 
 ENV PYART_QUIET=1
