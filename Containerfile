@@ -5,10 +5,8 @@ COPY . .
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git gcc g++ libproj-dev libgeos-dev \
     && rm -rf /var/lib/apt/lists/*
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install build && python -m build --wheel
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip wheel --wheel-dir /build/wheels /build/dist/*.whl
+RUN pip install build && python -m build --wheel
+RUN pip wheel --wheel-dir /build/wheels /build/dist/*.whl
 
 FROM python:3.14-slim
 
