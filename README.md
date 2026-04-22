@@ -9,8 +9,19 @@ Additionally, 5 minute precipitation accumulation COG files are created.
 
 ## Installation
 
+### Locally
+
 ```shell
 pip install .
+```
+
+### Container
+
+```shell
+# Build
+podman build -t qpemax .
+# Verify
+podman run --rm qpemax --help
 ```
 
 ## Usage
