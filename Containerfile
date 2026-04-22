@@ -33,7 +33,7 @@ LABEL org.opencontainers.image.source="https://github.com/fmidev/radar-qpe-max"
 
 # Runtime shared libraries only (no compilers, no git).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        libproj25 libgeos-c1v5 \
+        libexpat1 libproj25 libgeos-c1v5 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /opt/venv /opt/venv
