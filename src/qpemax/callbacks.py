@@ -1,71 +1,52 @@
+# builtin
+import os
 import time
 import threading
-import numpy as np
 from timeit import default_timer
+
+# pypi
+import psutil
 from dask.callbacks import Callback
 from dask.utils import format_time
-import psutil
-from multiprocessing import Pipe, Process, current_process
 
 
-class _Tracker(Process):
-    """Background process to track memory usage
-    of the children of the current process"""
+class _MemoryTracker:
+    """Track RSS memory of the current process plus its children.
+
+    Runs in-process (no subprocess), so it is safe under any multiprocessing
+    start method. The previous ``Process``-based implementation failed under
+    Python 3.14's default ``forkserver`` start method when the importing
+    module (e.g. Airflow's ``/tmp/script.py``) is not a safely importable
+    ``__main__``.
+    """
 
     def __init__(self):
-        super().__init__()
-        self.parent_pid = current_process().pid
-        self.parent_conn, self.child_conn = Pipe()
+        self._parent = psutil.Process(os.getpid())
 
-    def shutdown(self):
-        if not self.parent_conn.closed:
-            self.parent_conn.send("shutdown")
-            self.parent_conn.close()
-        self.join()
-
-    def _update_pids(self, pid):
-        children = self.parent.children()
-        return [self.parent] + [
-            p for p in children if p.pid != pid and p.status() != "zombie"
-        ]
-
-    def run(self):
-        self.parent = psutil.Process(self.parent_pid)
-        pid = current_process()
-        while True:
-            try:
-                msg = self.child_conn.recv()
-            except KeyboardInterrupt:
-                continue
-            if msg == "shutdown":
-                break
-            if msg != "update":
-                raise ValueError(f"Unrecognized message {msg}")
-            pids = self._update_pids(pid)
-            try:
-                memory = sum(p.memory_info().rss / 1024 ** 2 for p in pids)
-            except Exception:
-                memory = np.nan
-            self.child_conn.send(memory)
-        self.child_conn.close()
+    def sample(self) -> float:
+        try:
+            procs = [self._parent] + [
+                p for p in self._parent.children(recursive=True)
+                if p.status() != "zombie"
+            ]
+            return sum(p.memory_info().rss / 1024 ** 2 for p in procs)
+        except Exception:
+            return float("nan")
 
 
 class ProgressLogging(Callback):
     def __init__(self, logger, dt=1):
         self._logger = logger
         self._dt = dt
-        self._tracker = _Tracker()
+        self._tracker = _MemoryTracker()
 
     def _start(self, dsk):
         self._state = None
         self._start_time = default_timer()
-        # Start background thread
         self._running = True
         self._timer = threading.Thread(target=self._timer_func)
         self._timer.daemon = True
         self._timer.start()
-        # Start memory tracker
-        self._tracker.start()
 
     def _pretask(self, key, dsk, state):
         self._state = state
@@ -73,8 +54,6 @@ class ProgressLogging(Callback):
     def _finish(self, dsk, state, errored):
         self._running = False
         self._timer.join()
-        # Shutdown memory tracker
-        self._tracker.shutdown()
 
     def _timer_func(self):
         while self._running:
@@ -86,8 +65,7 @@ class ProgressLogging(Callback):
         s = self._state
         if s is None:
             return
-        self._tracker.parent_conn.send("update")
-        mem = self._tracker.parent_conn.recv()
+        mem = self._tracker.sample()
         ndone = len(s["finished"])
         todo_status = ["ready", "waiting", "running"]
         ntasks = sum(len(s[k]) for k in todo_status) + ndone

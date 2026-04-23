@@ -6,6 +6,8 @@ import datetime
 import logging
 import os
 
+import numpy as np
+import pandas as pd
 import rioxarray
 import xarray as xr
 
@@ -41,10 +43,29 @@ def _write_dattime_tif(
     logger.info(f'Processing geotiff product {tift}')
     with ProgressLogging(logger, dt=5):
         dattime.load()
-    tunits = 'minutes since ' + str(dattime.min().item())
-    enc = {'units': tunits, 'calendar': 'gregorian'}
-    dattime.rio.update_encoding(enc, inplace=True)
-    dattime.rio.to_raster(tift, dtype='uint16', compress=COG_COMPRESS)
+    # Coerce to datetime64[ns]; idxmax on a cftime-indexed dim returns
+    # object dtype (cftime objects interleaved with NaN fills), which
+    # doesn't support arithmetic or reductions cleanly.
+    flat = pd.to_datetime(
+        np.asarray(dattime.values).ravel(), errors='coerce', utc=True,
+    ).tz_localize(None)
+    times = flat.to_numpy(dtype='datetime64[ns]').reshape(dattime.shape)
+    tmin = pd.Timestamp(np.nanmin(times.astype('int64'))).to_datetime64()
+    tunits = 'minutes since ' + str(pd.Timestamp(tmin))
+    # Manually encode datetime64 -> uint16 minutes since tmin, bypassing
+    # xarray CF encoding (which tangles with rioxarray over _FillValue and
+    # AlwaysGreaterThan sentinels on datetime data). NaT -> 0 = nodata;
+    # valid times start at 1 (offset +1 so tmin itself isn't nodata).
+    delta_min = (times - tmin) / np.timedelta64(1, 'm')
+    delta_min = np.where(np.isnan(delta_min), -1, delta_min) + 1
+    encoded = xr.DataArray(
+        delta_min.astype('uint16'),
+        coords=dattime.coords, dims=dattime.dims,
+        attrs={k: v for k, v in dattime.attrs.items() if k != '_FillValue'},
+    )
+    encoded.attrs['units'] = tunits
+    encoded.rio.write_nodata(0, inplace=True)
+    encoded.rio.to_raster(tift, dtype='uint16', compress=COG_COMPRESS)
     unidat = rioxarray.open_rasterio(tift).rio.update_attrs({'units': tunits})
     unidat.rio.to_raster(
         tift, compress=COG_COMPRESS,

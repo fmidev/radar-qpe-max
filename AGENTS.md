@@ -2,31 +2,26 @@
 
 ## Project
 
-`qpemax` computes QPE (Quantitative Precipitation Estimation) max-accumulation statistics from ODIM HDF5 radar files, producing Cloud Optimized GeoTIFFs. Key pipeline: ODIM H5 → `pyart` Radar → gridded `xarray`/`rioxarray` (EPSG:3067) → netCDF cache → sliding-window max → COG GeoTIFF.
+`qpemax` computes QPE (Quantitative Precipitation Estimation) max-accumulation statistics from ODIM HDF5 radar files, producing Cloud Optimized GeoTIFFs. Key pipeline: ODIM H5 → `pyart` Radar → gridded `xarray`/`rioxarray` (EPSG:3067) → netCDF cache → sliding-window max → COG GeoTIFF. The process is really resource intensive requiring advanced dask-fu and chunking to even run on most machines.
 
 CLI entry point: `qpe` (subcommands: `grid`, `winmax`). See [README.md](README.md).
 
 ## Commands
 
 ```sh
-# Activate virtualenv
-/home/tiira/.virtualenvs/qpemax/bin/activate
-
-# Install
-pip install .
+# Run in development environment
+/home/tiira/.virtualenvs/qpemax/bin/python
 
 # Build container
 podman build -t qpemax .
 
-# Run tests with coverage
-hatch run cov
-
-# Run tests without coverage
-hatch run no-cov
-
 # Run the main program
 /home/tiira/.virtualenvs/qpemax/bin/qpe
 ```
+
+## Testing and debugging
+* Prefer agent hooks to run tests
+* Install only in virtualenv
 
 ## Code Style
 

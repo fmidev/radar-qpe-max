@@ -2,6 +2,8 @@
 import datetime
 import logging
 import json
+import os
+import sys
 
 import click
 
@@ -19,6 +21,19 @@ from qpemax.logs import streamlogger_setup
 
 
 logger = logging.getLogger('airflow.task')
+
+
+def _clean_exit(code: int = 0) -> None:
+    """Flush stdio and hard-exit, skipping interpreter finalization.
+
+    During normal Python shutdown, daemon threads from dask/h5py race
+    against I/O teardown, producing blank ``Error in sys.excepthook``
+    noise on stderr. ``os._exit`` avoids this entirely.
+    """
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(code)
+
 
 # multi-line help strings
 CHUNKSIZE_HELP = "Horizontal chunksize PX*PX. Larger chunksize speeds up the processing but " \
@@ -69,6 +84,7 @@ def grid(h5file, size, resolution, force, tif_dir, out_dir, dbz_field):
         resolution = autoresolution(size)
     qpe_grid_caching(h5file, size, resolution, force, cachedir=out_dir, resultsdir=tif_dir,
                      dbz_field=dbz_field)
+    _clean_exit()
 
 
 @cli.command()
@@ -117,3 +133,4 @@ def winmax(
     )
     if list_obsolete:
         print(json.dumps(nc_obsolete))
+    _clean_exit()

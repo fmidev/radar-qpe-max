@@ -10,14 +10,25 @@ import warnings
 from typing import List, Optional
 
 import h5py
+import numpy as np
 import pyart
 import rioxarray
-from pyart.aux_io.odim_h5 import _to_str
+import xradar as xd
+from pyart.xradar import Xradar
 from pyproj import CRS, Transformer
 
 from radproc.aliases.fmi import LWE
-from radproc.radar import z_r_qpe
 from radproc.tools import source2dict
+
+
+def _to_str(value) -> str:
+    """Decode ODIM H5 attribute bytes/array to a plain string."""
+    if isinstance(value, np.ndarray):
+        value = value.item() if value.shape == () else value[0]
+    if isinstance(value, bytes):
+        return value.decode('utf-8')
+    return str(value)
+
 
 from qpemax._version import __version__
 from qpemax.constants import (
@@ -31,23 +42,64 @@ from qpemax.utils import corr_suffix
 logger = logging.getLogger('airflow.task')
 
 
-def read_odim_h5(h5path: str, **kws) -> pyart.core.Radar:
-    """Read radar data from ODIM H5 file."""
+def _z_r_qpe(radar, dbz_field: str = ZH, lwe_field: str = LWE) -> None:
+    """Add precipitation rate field to radar in-place using r(z) relation.
+
+    Replaces ``radproc.radar.z_r_qpe`` which assumes pyart's positional sweep
+    indexing; the xradar-backed ``Xradar`` object uses label-based sweep keys.
+    """
+    dbz = radar.fields[dbz_field]['data']
+    z = 10.0 ** (dbz / 10.0)
+    rate = 0.0292 * z ** 0.6536
+    radar.add_field(lwe_field, {'units': 'mm h-1', 'data': rate})
+
+
+def read_odim_h5(h5path: str,
+                 include_datasets: Optional[List[str]] = None,
+                 file_field_names: bool = True,
+                 **_) -> Xradar:
+    """Read an ODIM H5 file into a pyart-compatible ``Xradar`` object.
+
+    Uses ``xradar`` for I/O (robust ODIM attribute handling), then wraps the
+    resulting DataTree in ``pyart.xradar.Xradar`` so downstream pyart APIs
+    (``GateFilter``, ``grid_from_radars``) keep working.
+
+    ``include_datasets`` is accepted for backward compatibility; entries of
+    the form ``datasetN`` are mapped to 0-based sweep indices. ``file_field_names``
+    is accepted and ignored — xradar preserves ODIM field names by default.
+    """
+    sweep: Optional[List[int]] = None
+    if include_datasets:
+        sweep = [int(d.replace('dataset', '')) - 1 for d in include_datasets]
     try:
-        radar = pyart.aux_io.read_odim_h5(h5path, **kws)
+        kws = {'sweep': sweep} if sweep is not None else {}
+        dtree = xd.io.open_odim_datatree(h5path, **kws)
     except Exception as e:
         logger.error(f'Reading {h5path}: {e}')
         raise
-    # workaround for pyart bug
-    radar.altitude['data'] = radar.altitude['data'].flatten()
-    radar.latitude['data'] = radar.latitude['data'].flatten()
-    radar.longitude['data'] = radar.longitude['data'].flatten()
+    # xradar preserves ODIM's 1-based sweep_number, but pyart.xradar.Xradar
+    # indexes sweeps 0..nsweeps-1 via label-based .sel(sweep_number=...).
+    # Remap to 0-based so add_field/get_slice work.
+    import xarray as xr
+    for i, key in enumerate(k for k in dtree.groups if k.startswith('/sweep_')):
+        node = dtree[key.lstrip('/')]
+        ds = node.to_dataset()
+        node.ds = ds.assign(
+            sweep_number=xr.DataArray(
+                np.int64(i), attrs=ds['sweep_number'].attrs))
+    radar = Xradar(dtree)
+    # xradar does not propagate ODIM /what/source into metadata; backfill it
+    # so _grid_to_dataset can extract NOD via source2dict.
+    try:
+        with h5py.File(h5path, 'r') as h5f:
+            radar.metadata['source'] = _to_str(h5f['/what'].attrs['source'])
+    except (KeyError, OSError):
+        pass
     return radar
 
 
 def basic_gatefilter(
-        radar: pyart.core.Radar,
-        field: str = ZH) -> pyart.filters.GateFilter:
+        radar, field: str = ZH) -> pyart.filters.GateFilter:
     """basic gatefilter based on examples in pyart documentation"""
     gatefilter = pyart.filters.GateFilter(radar)
     gatefilter.exclude_transition()
@@ -56,13 +108,14 @@ def basic_gatefilter(
 
 
 def create_grid(
-        radar: pyart.core.Radar, size: int = DEFAULT_XY_SIZE,
+        radar, size: int = DEFAULT_XY_SIZE,
         resolution: int = DEFAULT_RESOLUTION) -> pyart.core.Grid:
     """
     Create a grid from radar data.
 
     Args:
-        radar (pyart.core.Radar): The radar object containing the data.
+        radar: The radar object containing the data (pyart ``Radar`` or
+            ``pyart.xradar.Xradar``).
         size (int, optional): The size of the grid.
         resolution (int, optional): The resolution of the grid.
 
@@ -86,7 +139,7 @@ def create_grid(
                    (radar_x-r_m, radar_x+r_m),
                    (radar_y-r_m, radar_y+r_m))
     grid = pyart.map.grid_from_radars(
-        radar, gatefilters=gf,
+        (radar,), gatefilters=(gf,),
         gridding_algo='map_gates_to_grid',
         grid_shape=grid_shape,
         grid_limits=grid_limits, fields=[LWE],
@@ -102,7 +155,7 @@ def create_grid(
 
 
 def _grid_to_dataset(
-        radar: pyart.core.Radar,
+        radar,
         grid: pyart.core.Grid) -> 'xr.Dataset':
     """Convert a pyart Grid to a labelled xarray Dataset with CRS and metadata."""
     import xarray as xr
@@ -121,7 +174,7 @@ def _grid_to_dataset(
 
 
 def save_precip_grid(
-        radar: pyart.core.Radar, cachefile: str,
+        radar, cachefile: str,
         tiffile: Optional[str] = None, size: int = DEFAULT_XY_SIZE,
         resolution: int = DEFAULT_RESOLUTION, scans_per_hour: int = 12,
         blocksize: int = 512, p_chunksize: int = DEFAULT_P_CHUNKSIZE) -> None:
@@ -142,18 +195,26 @@ def save_precip_grid(
             break
         except BlockingIOError as e:
             logger.error(f'Error writing {cachefile}: {e}')
-            if e.errno == 11: # unable to lock file
+            if e.errno == 11:  # unable to lock file
+                # Remove any partial file left behind by the failed write —
+                # otherwise it gets picked up later as a "valid" cache and
+                # breaks combine_rasters with duplicate/zero coords.
+                if os.path.isfile(cachefile):
+                    try:
+                        os.remove(cachefile)
+                    except OSError:
+                        pass
                 retries += 1
                 time.sleep(1)
-                if os.path.isfile(cachefile):
-                    logger.warning('File was created by another process.')
-                    break
                 logger.error('Retrying after delay.')
             else:
                 raise
         except Exception as e:
             logger.error(f'Error writing {cachefile}: {e}')
             raise
+    else:
+        raise RuntimeError(
+            f'Failed to write {cachefile} after {max_retries} retries')
     if isinstance(tiffile, str):
         acc = (rda.isel(time=0)[LWE]/scans_per_hour).rename(ACC)
         acc.attrs.update(ATTRS[ACC])
@@ -213,7 +274,7 @@ def qpe_grid_caching(
         tiffile = os.path.join(tifdir, tifname)
     else:
         tiffile = None
-    z_r_qpe(radar, dbz_field=dbz_field)
+    _z_r_qpe(radar, dbz_field=dbz_field)
     save_precip_grid(radar, cachefile, tiffile=tiffile, size=size,
                      resolution=resolution, p_chunksize=p_chunksize, **kws)
     return nod

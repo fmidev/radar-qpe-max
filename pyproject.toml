@@ -22,7 +22,9 @@ classifiers = [
 dependencies = [
   "psutil",
   "rioxarray",
-  "radproc[arm] @ git+https://github.com/fmidev/radproc",
+  "arm_pyart>=2.0",
+  "xradar>=0.11",
+  "radproc @ git+https://github.com/fmidev/radproc",
   "distributed",
   "flox", # not a hard dependency
 ]

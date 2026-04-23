@@ -14,7 +14,7 @@ from qpemax import basic_gatefilter, ZH, tstep_from_fpaths
 from qpemax.accumulate import _accu_time_bounds, load_chunked_dataset
 from qpemax.cli import autoresolution
 from qpemax.grid import (
-    _grid_to_dataset, create_grid, get_nod, qpe_grid_caching,
+    _grid_to_dataset, _z_r_qpe, create_grid, get_nod, qpe_grid_caching,
     read_odim_h5, sweep_start_datetime,
 )
 from qpemax.output import _write_dat_attrs, _write_dattime_attrs
@@ -29,9 +29,8 @@ TEST_H5 = DATA_DIR / '202604170000_radar.polar.fivih.h5'
 
 @pytest.fixture(scope='module')
 def radar():
-    from radproc.radar import z_r_qpe
     r = read_odim_h5(str(TEST_H5), include_datasets=['dataset1'], file_field_names=True)
-    z_r_qpe(r, dbz_field=ZH)
+    _z_r_qpe(r, dbz_field=ZH)
     return r
 
 
@@ -173,8 +172,8 @@ def test_load_chunked_dataset(tmp_path):
 
 def test_read_odim_h5():
     r = read_odim_h5(str(TEST_H5), include_datasets=['dataset1'], file_field_names=True)
-    assert isinstance(r, pyart.core.Radar)
-    assert r.altitude['data'].ndim == 1   # pyart bug workaround
+    assert isinstance(r, (pyart.core.Radar, pyart.xradar.Xradar))
+    assert r.altitude['data'].ndim == 1
     assert r.latitude['data'].ndim == 1
     assert r.longitude['data'].ndim == 1
     assert ZH in r.fields
