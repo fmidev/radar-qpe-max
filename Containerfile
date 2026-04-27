@@ -17,9 +17,9 @@ ENV PATH=/opt/venv/bin:$PATH \
 WORKDIR /build
 
 # Copy source (include .git so hatch-vcs can derive the version).
-COPY pyproject.toml README.md LICENSE ./
-COPY src/ src/
-COPY .git/ .git/
+COPY . .
+# Reset any changes to ensure a clean state for hatch-vcs.
+RUN git reset --hard HEAD
 
 # Install the project and all its runtime dependencies into /opt/venv.
 RUN pip install .
