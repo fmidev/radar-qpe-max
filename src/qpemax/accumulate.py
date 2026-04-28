@@ -119,6 +119,8 @@ def _write_accums(accums, accumsfile, acc_chunksize: int,
     encoding = DEFAULT_ENCODING.copy()
     encoding[LWE]['chunksizes'] = (
         accums.shape[0], acc_chunksize, acc_chunksize)
+    # Align dask chunks to output encoding to avoid implicit shuffle on write
+    accums = accums.chunk({'time': -1, 'x': acc_chunksize, 'y': acc_chunksize})
     with ProgressLogging(logger, dt=5):
         accums.to_netcdf(accumsfile, encoding=encoding, engine='h5netcdf')
 
@@ -139,6 +141,9 @@ def accu(
     rds = load_chunked_dataset(ncpath)
     tstep_pre, tstep_last, iwin, tdelta = _accu_time_bounds(rds, date, win)
     rollsel = rds.sel(time=slice(tstep_pre, tstep_last))
+    # Consolidate time into one chunk so rolling is intra-chunk;
+    # reduce spatial chunks to keep memory bounded.
+    rollsel = rollsel.chunk({'time': -1, 'x': acc_chunksize, 'y': acc_chunksize})
     # The data is still precip rate, so scale to mm
     acc_scaling = datetime.timedelta(hours=1) / tdelta # 12 for 5min steps
     accums = (
