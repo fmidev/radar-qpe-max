@@ -21,7 +21,7 @@ UINT16_FILLVAL = np.iinfo(np.uint16).max
 DEFAULT_ENCODING = {
     LWE: {
         'zlib': True,
-        'complevel': 9,
+        'complevel': 4,
         '_FillValue': UINT16_FILLVAL,
         'dtype': 'uint16',
         'scale_factor': LWE_SCALE_FACTOR
