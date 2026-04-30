@@ -16,7 +16,7 @@ from qpemax.callbacks import ProgressLogging
 from qpemax.constants import (
     ACC, DATEFMT, DEFAULT_ACC_CHUNKSIZE, DEFAULT_CACHE_DIR,
     DEFAULT_ENCODING, DEFAULT_P_CHUNKSIZE, DEFAULT_RESOLUTION, DEFAULT_XY_SIZE,
-    EPSG_TARGET, QPE_CACHE_FMT, ZH,
+    DEFAULT_COMPUTE_CHUNKSIZE, EPSG_TARGET, QPE_CACHE_FMT, ZH,
 )
 from qpemax.utils import acc_cache_fname, corr_suffix
 
@@ -126,11 +126,16 @@ def _write_accums(accums, accumsfile, acc_chunksize: int,
 
 
 def accu(
-        date: datetime.date, nod: str, cachedir: str = DEFAULT_CACHE_DIR,
-        size: int = DEFAULT_XY_SIZE, resolution: int = DEFAULT_RESOLUTION,
+        date: datetime.date, nod: str,
+        cachedir: str = DEFAULT_CACHE_DIR,
+        size: int = DEFAULT_XY_SIZE,
+        resolution: int = DEFAULT_RESOLUTION,
         p_chunksize: int = DEFAULT_P_CHUNKSIZE,
-        acc_chunksize: int = DEFAULT_ACC_CHUNKSIZE, dbz_field: str = ZH,
-        win: str = '1D', **kws):
+        compute_chunksize: int = DEFAULT_COMPUTE_CHUNKSIZE,
+        acc_chunksize: int = DEFAULT_ACC_CHUNKSIZE,
+        dbz_field: str = ZH,
+        win: str = '1D', **kws
+    ):
     """Rolling window precipitation accumulation."""
     corr = corr_suffix(dbz_field)
     ncpath = os.path.join(cachedir, QPE_CACHE_FMT.format(
@@ -142,8 +147,9 @@ def accu(
     tstep_pre, tstep_last, iwin, tdelta = _accu_time_bounds(rds, date, win)
     rollsel = rds.sel(time=slice(tstep_pre, tstep_last))
     # Consolidate time into one chunk so rolling is intra-chunk;
-    # reduce spatial chunks to keep memory bounded.
-    rollsel = rollsel.chunk({'time': -1, 'x': acc_chunksize, 'y': acc_chunksize})
+    # use large spatial chunks for compute, _write_accums rechunks to acc_chunksize.
+    compute_chunksize = min(p_chunksize, compute_chunksize)
+    rollsel = rollsel.chunk({'time': -1, 'x': compute_chunksize, 'y': compute_chunksize})
     # The data is still precip rate, so scale to mm
     acc_scaling = datetime.timedelta(hours=1) / tdelta # 12 for 5min steps
     accums = (
