@@ -60,7 +60,6 @@ def composite_max(
     datasets = [rasterio.open(p) for p in input_paths]
     try:
         merge_kwargs: dict = {
-            "datasets": datasets,
             "nodata": UINT16_FILLVAL,
             "method": "max",
         }
@@ -68,7 +67,7 @@ def composite_max(
             merge_kwargs["bounds"] = bounds
         if resolution is not None:
             merge_kwargs["res"] = resolution
-        mosaic, transform = merge(**merge_kwargs)
+        mosaic, transform = merge(datasets, **merge_kwargs)
     finally:
         for ds in datasets:
             ds.close()
