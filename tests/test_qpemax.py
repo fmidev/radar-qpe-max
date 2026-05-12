@@ -141,6 +141,18 @@ def test_accu_time_bounds_10min():
     assert tstep_pre == pd.Timestamp('2024-05-27 00:10')
 
 
+def test_accu_time_bounds_cftime():
+    """tdelta must not be NaT after convert_calendar (CFTimeIndex has freq=None)."""
+    date = datetime.date(2024, 5, 28)
+    rds = _make_rds(freq='5min', date='2024-05-27')
+    rds = rds.convert_calendar(calendar='standard', use_cftime=True)
+    tstep_pre, tstep_last, iwin, tdelta = _accu_time_bounds(rds, date, '1D')
+    assert tdelta == pd.to_timedelta('5min')
+    assert iwin == 288
+    assert tstep_pre is not pd.NaT
+    assert tstep_last is not pd.NaT
+
+
 # --- Tests needing tmp_path ---
 
 def test_two_day_glob(tmp_path):

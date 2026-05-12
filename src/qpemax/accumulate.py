@@ -103,7 +103,10 @@ def _accu_time_bounds(
     dwin = pd.to_timedelta(win)
     tind = rds.indexes['time']
     # timestep length as timedelta
-    tdelta = pd.to_timedelta(tind.freq) or pd.Series(tind).diff().median()
+    # CFTimeIndex after convert_calendar may have freq=None;
+    # pd.to_timedelta(None) returns NaT which is truthy, so use explicit check.
+    freq = tind.freq
+    tdelta = pd.to_timedelta(freq) if freq is not None else pd.Series(tind).diff().median()
     tstep_last = pd.to_datetime(date + datetime.timedelta(days=1)) - tdelta
     tstep_pre = pd.to_datetime(date) - dwin + tdelta
     return tstep_pre, tstep_last, iwin, tdelta
