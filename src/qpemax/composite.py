@@ -16,6 +16,7 @@ from pathlib import Path
 import numpy as np
 import rasterio
 from rasterio.merge import merge
+from rasterio.vrt import WarpedVRT
 
 # local
 from qpemax.constants import COG_COMPRESS, EPSG_TARGET, UINT16_FILLVAL
@@ -57,7 +58,10 @@ def composite_max(
     if not input_paths:
         raise ValueError("No input paths provided for compositing.")
 
-    datasets = [rasterio.open(p) for p in input_paths]
+    raw_datasets = [rasterio.open(p) for p in input_paths]
+    # WarpedVRT normalizes upside-down (positive pixel height) transforms
+    # to standard north-up orientation required by rasterio.merge.
+    datasets = [WarpedVRT(ds) for ds in raw_datasets]
     try:
         merge_kwargs: dict = {
             "nodata": UINT16_FILLVAL,
@@ -70,6 +74,8 @@ def composite_max(
         mosaic, transform = merge(datasets, **merge_kwargs)
     finally:
         for ds in datasets:
+            ds.close()
+        for ds in raw_datasets:
             ds.close()
 
     height, width = mosaic.shape[1], mosaic.shape[2]
