@@ -8,12 +8,13 @@ import sys
 import click
 
 from qpemax import (
-    DATEFMT, DEFAULT_CACHE_DIR,
+    DATEFMT, DEFAULT_CACHE_DIR, EPSG_TARGET,
     two_day_glob,
     accu,
     qpe_grid_caching,
     generate_individual_rasters,
     combine_rasters,
+    composite_max,
     aggmax,
     write_max_tifs,
     __version__)
@@ -133,4 +134,33 @@ def winmax(
     )
     if list_obsolete:
         print(json.dumps(nc_obsolete))
+    _clean_exit()
+
+
+@cli.command()
+@click.argument('input_files', nargs=-1, required=True)
+@click.option('-o', '--output', metavar='PATH', required=True, help='Output composite COG path.')
+@click.option('-b', '--bounds', metavar='XMIN,YMIN,XMAX,YMAX', default=None,
+              help='Grid extent in target CRS. Default: union of inputs.')
+@click.option('-r', '--resolution', metavar='METRE', type=float, default=None,
+              help='Grid cell size in meters. Default: finest input resolution.')
+@click.option('-e', '--epsg', metavar='CODE', type=int, default=EPSG_TARGET,
+              help=f'Target CRS EPSG code. Default: {EPSG_TARGET}.')
+def composite(input_files, output, bounds, resolution, epsg):
+    """Composite max-accumulation from multiple single-radar COGs.
+
+    INPUT_FILES are paths to single-radar max-accumulation GeoTIFFs."""
+    parsed_bounds = None
+    if bounds is not None:
+        parts = [float(x) for x in bounds.split(',')]
+        if len(parts) != 4:
+            raise click.BadParameter('bounds must have exactly 4 comma-separated values', param_hint='--bounds')
+        parsed_bounds = tuple(parts)
+    composite_max(
+        list(input_files),
+        output,
+        bounds=parsed_bounds,
+        resolution=resolution,
+        crs=f"EPSG:{epsg}",
+    )
     _clean_exit()
