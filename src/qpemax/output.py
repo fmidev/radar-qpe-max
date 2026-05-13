@@ -14,6 +14,7 @@ import xarray as xr
 from qpemax.callbacks import ProgressLogging
 from qpemax.constants import (
     ACC, ATTRS, COG_COMPRESS, DATEFMT, DEFAULT_RESOLUTION, DEFAULT_XY_SIZE,
+    LWE_SCALE_FACTOR, UINT16_FILLVAL,
 )
 
 
@@ -77,6 +78,12 @@ def _write_dattime_tif(
 def _write_dat_tif(dat: xr.DataArray, tifp: str, blocksize: int = 512) -> None:
     """main geotiff"""
     logger.info(f'Processing geotiff product {tifp}')
+    dat.attrs.pop('_FillValue', None)
+    dat.encoding.update({
+        'scale_factor': LWE_SCALE_FACTOR,
+        '_FillValue': UINT16_FILLVAL,
+        'dtype': 'uint16',
+    })
     with ProgressLogging(logger, dt=5):
         dat.rio.to_raster(
             tifp, driver='COG',

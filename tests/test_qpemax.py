@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pyart
 import pytest
+import rasterio
 import xarray as xr
 
 from radproc.aliases.fmi import LWE
@@ -13,11 +14,13 @@ from radproc.aliases.fmi import LWE
 from qpemax import basic_gatefilter, ZH, tstep_from_fpaths
 from qpemax.accumulate import _accu_time_bounds, load_chunked_dataset
 from qpemax.cli import autoresolution
+from qpemax.composite import composite_max
+from qpemax.constants import LWE_SCALE_FACTOR, UINT16_FILLVAL
 from qpemax.grid import (
     _grid_to_dataset, _z_r_qpe, create_grid, get_nod, qpe_grid_caching,
     read_odim_h5, sweep_start_datetime,
 )
-from qpemax.output import _write_dat_attrs, _write_dattime_attrs
+from qpemax.output import _write_dat_attrs, _write_dat_tif, _write_dattime_attrs
 from qpemax.utils import acc_cache_fname, corr_suffix, two_day_glob
 
 
@@ -229,3 +232,58 @@ def test_qpe_grid_caching(tmp_path):
     # second call must use cache — no new files
     assert qpe_grid_caching(str(TEST_H5), **kws) == 'fivih'
     assert len(list(tmp_path.glob('*.nc'))) == 1
+
+
+# --- COG scale/offset integration tests ---
+
+def _make_cog_da(values=None):
+    """Minimal float DataArray simulating post-aggmax output (no encoding)."""
+    if values is None:
+        values = np.array([[1.23, 4.56], [0.0, np.nan]], dtype='float64')
+    da = xr.DataArray(values, dims=['y', 'x'],
+                      coords={'x': [0.0, 250.0], 'y': [250.0, 0.0]})
+    da = da.rio.set_spatial_dims('x', 'y')
+    da.rio.write_crs(3067, inplace=True)
+    da.rio.write_nodata(np.nan, inplace=True)
+    return da
+
+
+def test_write_dat_tif_scale_offset(tmp_path):
+    """_write_dat_tif must embed GDAL band scale/offset in the COG."""
+    da = _make_cog_da()
+    tifp = str(tmp_path / 'test_dat.tif')
+    _write_dat_tif(da, tifp, blocksize=128)
+    with rasterio.open(tifp) as ds:
+        assert ds.scales == (LWE_SCALE_FACTOR,)
+        assert ds.offsets == (0.0,)
+        assert ds.dtypes == ('uint16',)
+        assert ds.nodata == UINT16_FILLVAL
+        raw = ds.read(1)
+    # 1.23 mm -> round(1.23/0.01) = 123
+    assert raw[0, 0] == 123
+    assert raw[0, 1] == 456
+    assert raw[1, 0] == 0
+    assert raw[1, 1] == UINT16_FILLVAL
+
+
+def test_composite_max_scale_offset(tmp_path):
+    """composite_max must embed GDAL band scale/offset in the output COG."""
+    # Write two single-radar COGs with _write_dat_tif
+    da1 = _make_cog_da(np.array([[100, 200], [300, np.nan]], dtype='float64'))
+    da2 = _make_cog_da(np.array([[150, 100], [np.nan, np.nan]], dtype='float64'))
+    tif1 = str(tmp_path / 'radar1.tif')
+    tif2 = str(tmp_path / 'radar2.tif')
+    _write_dat_tif(da1, tif1, blocksize=128)
+    _write_dat_tif(da2, tif2, blocksize=128)
+    # Composite
+    out = str(tmp_path / 'composite.tif')
+    composite_max([tif1, tif2], out)
+    with rasterio.open(out) as ds:
+        assert ds.scales == (LWE_SCALE_FACTOR,)
+        assert ds.offsets == (0.0,)
+        assert ds.dtypes == ('uint16',)
+        raw = ds.read(1)
+    # pixel-wise max: [max(10000,15000), max(20000,10000)] = [15000, 20000]
+    assert raw[0, 0] == 15000
+    assert raw[0, 1] == 20000
+    assert raw[1, 0] == 30000

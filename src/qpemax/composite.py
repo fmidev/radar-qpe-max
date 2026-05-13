@@ -19,7 +19,7 @@ from rasterio.merge import merge
 from rasterio.vrt import WarpedVRT
 
 # local
-from qpemax.constants import COG_COMPRESS, EPSG_TARGET, UINT16_FILLVAL
+from qpemax.constants import COG_COMPRESS, EPSG_TARGET, LWE_SCALE_FACTOR, UINT16_FILLVAL
 
 logger = logging.getLogger("airflow.task")
 
@@ -93,6 +93,8 @@ def composite_max(
     }
 
     with rasterio.open(output_path, "w", **profile) as dst:
+        dst.scales = (LWE_SCALE_FACTOR,)
+        dst.offsets = (0.0,)
         dst.write(mosaic[0].astype(np.uint16), 1)
 
     logger.info(
