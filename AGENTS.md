@@ -6,6 +6,10 @@
 
 CLI entry point: `qpe` (subcommands: `grid`, `winmax`). See [README.md](README.md).
 
+## Key principles
+- Don't assume. Don't hide confusion. Surface tradeoffs.
+- No speculation-driven extrapolation. If you don't know, say so. Or ask the user.
+
 ## Commands
 
 ```sh
@@ -21,7 +25,7 @@ podman build -t qpemax .
 
 ## Testing and debugging
 * Prefer agent hooks to run tests
-* Install only in virtualenv
+* Install only in the virtualenv
 
 ## Code Style
 
@@ -30,21 +34,6 @@ podman build -t qpemax .
 * **Type hints**: Use the most modern convention supported
 * Avoid trivial functions
 * Succinct, to the point documentation
-
-### Import grouping
-
-Imports are manually grouped with inline comments:
-
-```python
-# builtin
-import os
-
-# pypi
-import numpy as np
-
-# local
-from qpemax import something
-```
 
 ### Airflow integration
 
@@ -59,9 +48,16 @@ This package is deployed as a containerized service in FMI's Airflow v2.11 radar
 
 | Path | Purpose |
 |------|---------|
-| `src/qpemax/cli.py` | CLI entry point |
+| `src/qpemax/__init__.py` | Package init; exports version, constants, public API |
+| `src/qpemax/cli.py` | CLI entry point (`grid`, `winmax` subcommands) |
+| `src/qpemax/grid.py` | ODIM H5 → pyart → gridded xarray (EPSG:3067) |
+| `src/qpemax/accumulate.py` | Sliding-window max-accumulation via xarray/dask |
+| `src/qpemax/composite.py` | Multi-radar national composite (pixel-wise max) |
+| `src/qpemax/output.py` | Write xarray datasets to COG GeoTIFF |
+| `src/qpemax/constants.py` | EPSG, field names, encoding/scale defaults |
 | `src/qpemax/callbacks.py` | Dask progress/memory logging |
 | `src/qpemax/logs.py` | Logging utilities |
+| `src/qpemax/utils.py` | Filename generation, suffix/cache helpers |
 | `tests/test_qpemax.py` | Pytest tests |
 
 ## Version
