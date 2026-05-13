@@ -47,9 +47,14 @@ def _write_dattime_tif(
     # Coerce to datetime64[ns]; idxmax on a cftime-indexed dim returns
     # object dtype (cftime objects interleaved with NaN fills), which
     # doesn't support arithmetic or reductions cleanly.
-    flat = pd.to_datetime(
-        np.asarray(dattime.values).ravel(), errors='coerce', utc=True,
-    ).tz_localize(None)
+    raw = np.asarray(dattime.values).ravel()
+    # cftime objects are not recognized by pd.to_datetime with utc=True;
+    # convert via isoformat strings which pandas parses correctly.
+    if raw.dtype == object and len(raw) > 0:
+        strs = [v.isoformat() if hasattr(v, 'isoformat') else None for v in raw]
+        flat = pd.to_datetime(strs, errors='coerce')
+    else:
+        flat = pd.to_datetime(raw, errors='coerce', utc=True).tz_localize(None)
     times = flat.to_numpy(dtype='datetime64[ns]').reshape(dattime.shape)
     tmin = pd.Timestamp(np.nanmin(times.astype('int64'))).to_datetime64()
     tunits = 'minutes since ' + str(pd.Timestamp(tmin))
