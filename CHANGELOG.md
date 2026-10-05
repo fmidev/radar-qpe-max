@@ -18,3 +18,11 @@
 - `composite_max` and `composite_max_with_time` use the finest input resolution
   when `resolution` is not given, as documented (previously the first input's).
 - CLI `-r/--resolution` is parsed as an integer.
+- **Breaking:** daily max GeoTIFFs are named following the FMI radar GeoTIFF
+  convention, e.g. `202610050000_fikor_max_24h_acrr_finrad250_raw.tif`
+  (previously `fikor20261004max1 d1024px250m.tif`). The timestamp is the end of
+  the UTC day, the window is given in whole hours and `size` is no longer part
+  of the name. New helpers `max_tif_name` and `max_tif_glob`.
+- `write_max_tifs` takes `dbz_field` instead of `corr` and no longer takes
+  `size`; CLI `winmax` now marks attenuation corrected (`-z DBZHC`) output as
+  `rawac`. Windows that are not whole hours are rejected.
