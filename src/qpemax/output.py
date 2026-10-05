@@ -13,12 +13,67 @@ import xarray as xr
 
 from qpemax.callbacks import ProgressLogging
 from qpemax.constants import (
-    ACC, ATTRS, COG_COMPRESS, DATEFMT, DEFAULT_RESOLUTION, DEFAULT_XY_SIZE,
-    LWE_SCALE_FACTOR, UINT16_FILLVAL,
+    ACC, ATTRS, COG_COMPRESS, DEFAULT_RESOLUTION, LWE_SCALE_FACTOR,
+    UINT16_FILLVAL,
 )
+from qpemax.utils import corr_suffix
 
 
 logger = logging.getLogger('airflow.task')
+
+MAX_TIF_FMT = (
+    '{ts}_{site}_{product}_{param}_acrr_finrad{resolution}_{filt}.tif'
+)
+
+
+def _max_tif_segments(
+        date: datetime.date, win: str, resolution: int, dbz_field: str,
+) -> dict[str, str]:
+    """Filename segments shared by all daily max products of a date."""
+    hours = pd.to_timedelta(win) / pd.Timedelta(hours=1)
+    if hours <= 0 or not hours.is_integer():
+        raise ValueError(f'window {win!r} is not a positive whole number of hours')
+    end = pd.Timestamp(date).normalize() + pd.Timedelta(days=1)
+    return dict(
+        ts=end.strftime('%Y%m%d%H%M'), param=f'{int(hours)}h',
+        resolution=str(int(resolution)),
+        filt='rawac' if corr_suffix(dbz_field) else 'raw',
+    )
+
+
+def max_tif_name(
+        date: datetime.date, nod: str, product: str, win: str,
+        resolution: int, dbz_field: str = 'DBZH') -> str:
+    """Daily max product filename following the FMI radar GeoTIFF convention.
+
+    `{timestamp}_{site}_{product}_{parameter}_acrr_finrad{resolution}_{filter}.tif`
+
+    - timestamp: end of the UTC `date` (`date` + 1 day, 00:00) as `%Y%m%d%H%M`.
+      The max is taken over all sliding windows whose last time step is on `date`.
+    - site: radar node name `nod` or `composite`.
+    - product: `max` (accumulation) or `maxtime` (time of maximum).
+    - parameter: window length `win` in whole hours, e.g. `1 D` -> `24h`.
+    - filter: `rawac` for attenuation corrected `dbz_field` (e.g. DBZHC), else `raw`.
+
+    Raises ValueError on non-whole-hour windows or segments containing `_` or `.`."""
+    segments = _max_tif_segments(date, win, resolution, dbz_field)
+    segments.update(site=nod, product=product)
+    for key, value in segments.items():
+        if not value or '_' in value or '.' in value:
+            raise ValueError(f'invalid filename segment {key}={value!r}')
+    return MAX_TIF_FMT.format(**segments)
+
+
+def max_tif_glob(
+        date: datetime.date, win: str, resolution: int,
+        dbz_field: str = 'DBZH') -> str:
+    """Glob pattern for the `max` files of `date` for all sites.
+
+    Matches `max` but not `maxtime` products. Note that the pattern also
+    matches the `composite` max file; exclude paths containing `_composite_`
+    if it is written to the same directory."""
+    segments = _max_tif_segments(date, win, resolution, dbz_field)
+    return MAX_TIF_FMT.format(site='*', product='max', **segments)
 
 
 def _write_dat_attrs(data: xr.Dataset, rdattrs: dict) -> xr.Dataset:
@@ -99,17 +154,16 @@ def _write_dat_tif(dat: xr.DataArray, tifp: str, blocksize: int = 512) -> None:
 
 def write_max_tifs(
         dat: xr.DataArray, dattime: xr.DataArray, date: datetime.date,
-        resultsdir: str, nod: str, win: str, corr: str = '',
-        size: int = DEFAULT_XY_SIZE,
+        resultsdir: str, nod: str, win: str, dbz_field: str = 'DBZH',
         resolution: int = DEFAULT_RESOLUTION) -> None:
-    """Write maximum precipitation accumulation and time to geotiffs."""
-    win = win.lower()
-    tstamp = date.strftime(DATEFMT)
-    tifp = os.path.join(
-        resultsdir,
-        f'{nod}{tstamp}max{win}{size}px{resolution}m{corr}.tif')
-    tift = os.path.join(
-        resultsdir,
-        f'{nod}{tstamp}maxtime{win}{size}px{resolution}m{corr}.tif')
+    """Write maximum precipitation accumulation and time to geotiffs.
+
+    File names are given by `max_tif_name`."""
+    tifp, tift = (
+        os.path.join(
+            resultsdir,
+            max_tif_name(date, nod, product, win, resolution, dbz_field))
+        for product in ('max', 'maxtime')
+    )
     _write_dat_tif(dat, tifp)
     _write_dattime_tif(dattime, tift)
