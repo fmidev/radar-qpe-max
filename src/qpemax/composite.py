@@ -40,6 +40,11 @@ def _parse_time_units(units_str: str) -> np.datetime64 | None:
     return ref
 
 
+def _finest_res(datasets: list) -> tuple[float, float]:
+    """Finest (smallest) x and y pixel size among the datasets."""
+    return min(ds.res[0] for ds in datasets), min(ds.res[1] for ds in datasets)
+
+
 def composite_max(
     input_paths: list[str | Path],
     output_path: str | Path,
@@ -75,8 +80,8 @@ def composite_max(
         raise ValueError("No input paths provided for compositing.")
 
     raw_datasets = [rasterio.open(p) for p in input_paths]
-    # WarpedVRT normalizes upside-down (positive pixel height) transforms
-    # to standard north-up orientation required by rasterio.merge.
+    # WarpedVRT is only needed for legacy (pre-v3) bottom-up inputs with
+    # positive pixel height; current inputs are already north-up.
     datasets = [WarpedVRT(ds) for ds in raw_datasets]
     try:
         merge_kwargs: dict = {
@@ -85,8 +90,9 @@ def composite_max(
         }
         if bounds is not None:
             merge_kwargs["bounds"] = bounds
-        if resolution is not None:
-            merge_kwargs["res"] = resolution
+        merge_kwargs["res"] = (
+            resolution if resolution is not None else _finest_res(datasets)
+        )
         mosaic, transform = merge(datasets, **merge_kwargs)
     finally:
         for ds in datasets:
@@ -136,8 +142,9 @@ def _resolve_target_grid(
     merge_kwargs: dict = {"nodata": UINT16_FILLVAL, "method": "max"}
     if bounds is not None:
         merge_kwargs["bounds"] = bounds
-    if resolution is not None:
-        merge_kwargs["res"] = resolution
+    merge_kwargs["res"] = (
+        resolution if resolution is not None else _finest_res(datasets)
+    )
     _, transform = merge(datasets, **merge_kwargs)
     # Re-derive shape from bounds + transform
     if bounds is not None:
@@ -200,7 +207,7 @@ def composite_max_with_time(
 
     n = len(acc_paths)
 
-    # Open all inputs, wrap in WarpedVRT to normalize orientation
+    # Open all inputs; WarpedVRT normalizes legacy bottom-up inputs
     raw_acc = [rasterio.open(p) for p in acc_paths]
     raw_time = [rasterio.open(p) for p in time_paths]
     vrt_acc = [WarpedVRT(ds) for ds in raw_acc]
