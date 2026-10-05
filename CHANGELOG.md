@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (next major)
+## 3.0.0
 
 > [!IMPORTANT]
 > **Grid geometry changed: existing netCDF caches are incompatible and must be
