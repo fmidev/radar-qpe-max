@@ -18,7 +18,7 @@ from qpemax.composite import composite_max
 from qpemax.constants import LWE_SCALE_FACTOR, UINT16_FILLVAL
 from qpemax.grid import (
     _grid_to_dataset, _z_r_qpe, create_grid, get_nod, qpe_grid_caching,
-    read_odim_h5, sweep_start_datetime,
+    read_odim_h5, save_precip_grid, sweep_start_datetime,
 )
 from qpemax.output import _write_dat_attrs, _write_dat_tif, _write_dattime_attrs
 from qpemax.utils import acc_cache_fname, corr_suffix, two_day_glob
@@ -287,3 +287,104 @@ def test_composite_max_scale_offset(tmp_path):
     assert raw[0, 0] == 15000
     assert raw[0, 1] == 20000
     assert raw[1, 0] == 30000
+
+
+# --- Grid geometry ---
+
+FINRAD_BOUNDS = (-208000, 6390000, 1072000, 7926000)
+
+
+def _radar_xy(radar):
+    from pyproj import Transformer
+    return Transformer.from_crs('WGS84', 3067, always_xy=True).transform(
+        radar.longitude['data'][0], radar.latitude['data'][0])
+
+
+def test_create_grid_odd_size(radar):
+    with pytest.raises(ValueError):
+        create_grid(radar, size=15, resolution=5000)
+
+
+def test_site_tif_geometry(radar, tmp_path):
+    """Per-site raster is north-up, exactly `resolution` and on the lattice."""
+    size, res = 16, 5000
+    grid = create_grid(radar, size=size, resolution=res)
+    tif = str(tmp_path / 'site.tif')
+    save_precip_grid(radar, str(tmp_path / 'site.nc'), tiffile=tif,
+                     size=size, resolution=res, p_chunksize=size)
+    with rasterio.open(tif) as ds:
+        t = ds.transform
+        assert ds.shape == (size, size)
+    assert (t.a, t.e) == (res, -res)
+    assert t.b == t.d == 0
+    assert t.c % res == 0 and t.f % res == 0
+    rx, ry = _radar_xy(radar)
+    col, row = ~t * (rx, ry)
+    assert int(col) in (size//2 - 1, size//2)
+    assert int(row) in (size//2 - 1, size//2)
+    # netCDF cache is north-up as well
+    rda = _grid_to_dataset(radar, grid)
+    assert rda.rio.transform() == t
+    assert np.all(np.diff(rda.y.values) == -res)
+    assert np.all(np.diff(rda.x.values) == res)
+
+
+def _write_lattice_tif(path, data_mm, x0, y1, res=250):
+    """Write a north-up single-site max COG with top-left corner (x0, y1)."""
+    ny, nx = data_mm.shape
+    da = xr.DataArray(
+        data_mm, dims=['y', 'x'],
+        coords={'x': x0 + res*(np.arange(nx) + 0.5),
+                'y': y1 - res*(np.arange(ny) + 0.5)})
+    da = da.rio.set_spatial_dims('x', 'y').rio.write_crs(3067)
+    da.rio.write_nodata(np.nan, inplace=True)
+    _write_dat_tif(da, str(path), blocksize=512)
+
+
+def test_composite_finrad_no_resampling(tmp_path):
+    """Aligned 2048 px / 250 m inputs composite onto finrad without resampling."""
+    res, size = 250, 2048
+    rng = np.random.default_rng(0)
+    # top-left corners on the lattice, overlapping inputs
+    corners = [(-100000, 7500000), (150000, 7300000)]
+    paths, raws = [], []
+    for i, (x0, y1) in enumerate(corners):
+        data = rng.integers(0, 50000, (size, size)) / 100
+        data[:10, :10] = np.nan
+        p = tmp_path / f'site{i}.tif'
+        _write_lattice_tif(p, data, x0, y1, res)
+        with rasterio.open(p) as ds:
+            raws.append(ds.read(1))
+        paths.append(p)
+    out = tmp_path / 'composite.tif'
+    composite_max(paths, out, bounds=FINRAD_BOUNDS)
+    with rasterio.open(out) as ds:
+        assert ds.shape == (6144, 5120)
+        t = ds.transform
+        result = ds.read(1)
+    assert (t.c, t.f) == (-208000, 7926000)
+    assert (t.a, t.e) == (res, -res)
+    expected = np.zeros((6144, 5120), dtype=np.uint16)
+    covered = np.zeros_like(expected, dtype=bool)
+    xmin, _, _, ymax = FINRAD_BOUNDS
+    for raw, (x0, y1) in zip(raws, corners):
+        r0, c0 = (ymax - y1)//res, (x0 - xmin)//res
+        win = np.s_[r0:r0 + size, c0:c0 + size]
+        valid = raw != UINT16_FILLVAL
+        expected[win] = np.where(valid, np.maximum(expected[win], raw),
+                                 expected[win])
+        covered[win] |= valid
+    expected[~covered] = UINT16_FILLVAL
+    np.testing.assert_array_equal(result, expected)
+
+
+def test_composite_finest_resolution(tmp_path):
+    """Without `resolution`, the finest input resolution is used."""
+    coarse, fine = tmp_path / 'coarse.tif', tmp_path / 'fine.tif'
+    _write_lattice_tif(coarse, np.ones((4, 4)), 0, 2000, res=500)
+    _write_lattice_tif(fine, np.ones((4, 4)), 0, 1000, res=250)
+    out = tmp_path / 'composite.tif'
+    composite_max([coarse, fine], out)
+    with rasterio.open(out) as ds:
+        assert ds.res == (250, 250)
+        assert ds.shape == (8, 8)

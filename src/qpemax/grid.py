@@ -113,31 +113,43 @@ def create_grid(
     """
     Create a grid from radar data.
 
+    The grid is ``size`` x ``size`` pixels of exactly ``resolution`` metres in
+    EPSG:3067. Pixel edges lie on a fixed lattice of multiples of
+    ``resolution``, and the grid is centred on the lattice node nearest to the
+    radar, so grids of different radars line up without resampling.
+
     Args:
         radar: The radar object containing the data (pyart ``Radar`` or
             ``pyart.xradar.Xradar``).
-        size (int, optional): The size of the grid.
+        size (int, optional): The size of the grid. Must be even.
         resolution (int, optional): The resolution of the grid.
 
     Returns:
         pyart.core.Grid: The grid object containing the gridded data.
     """
+    if size % 2:
+        raise ValueError(f'Grid size must be even, got {size}.')
     gf = basic_gatefilter(radar)
     crs_target = CRS(EPSG_TARGET)
     with warnings.catch_warnings():
         # "you might lose some information blah blah"
         warnings.filterwarnings("ignore", category=UserWarning)
         projd_target = crs_target.to_dict()
-    transp = Transformer.from_crs('WGS84', crs_target)
-    radar_y, radar_x = transp.transform(radar.latitude['data'][0],
-                                        radar.longitude['data'][0])
-    r_m = size*resolution/2
+    transp = Transformer.from_crs('WGS84', crs_target, always_xy=True)
+    radar_x, radar_y = transp.transform(radar.longitude['data'][0],
+                                        radar.latitude['data'][0])
+    # Lower-left pixel edge on the resolution lattice; pyart wants centres.
+    half_extent = size*resolution//2
+    centres = resolution*(np.arange(size) + 0.5)
+    x = round(radar_x/resolution)*resolution - half_extent + centres
+    y = round(radar_y/resolution)*resolution - half_extent + centres
     radar_alt = radar.altitude['data'][0]
     h_factor_xy = 1.0
     grid_shape = (1, size, size)
+    # pyart order: (z, y, x); grid_origin=(0, 0) makes limits absolute coords
     grid_limits = ((0, 10000), # upper limit does not seem to matter
-                   (radar_x-r_m, radar_x+r_m),
-                   (radar_y-r_m, radar_y+r_m))
+                   (y[0], y[-1]),
+                   (x[0], x[-1]))
     grid = pyart.map.grid_from_radars(
         (radar,), gatefilters=(gf,),
         gridding_algo='map_gates_to_grid',
@@ -149,17 +161,22 @@ def create_grid(
         h_factor=(50, h_factor_xy, h_factor_xy),
         min_radius=330,
         roi_func='dist_beam')
-    grid.x['data'] = grid.x['data'].flatten()
-    grid.y['data'] = grid.y['data'].flatten()
+    # exact lattice values instead of pyart's linspace
+    grid.x['data'] = x
+    grid.y['data'] = y
     return grid
 
 
 def _grid_to_dataset(
         radar,
         grid: pyart.core.Grid) -> 'xr.Dataset':
-    """Convert a pyart Grid to a labelled xarray Dataset with CRS and metadata."""
+    """Convert a pyart Grid to a labelled xarray Dataset with CRS and metadata.
+
+    The dataset is oriented north-up (``y`` descending) so that all
+    downstream rasters have a negative pixel height."""
     import xarray as xr
     rds = grid.to_xarray().isel(z=0).reset_coords(drop=True)
+    rds = rds.sortby('y', ascending=False)
     rda = rds[LWE].fillna(0)
     rda.rio.write_crs(EPSG_TARGET, inplace=True)
     rda = rda.to_dataset()
