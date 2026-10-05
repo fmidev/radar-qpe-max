@@ -43,7 +43,7 @@ from qpemax.accumulate import (
     load_chunked_dataset,
 )
 from qpemax.composite import composite_max, composite_max_with_time, composite_time_from_max
-from qpemax.output import write_max_tifs
+from qpemax.output import max_tif_glob, max_tif_name, write_max_tifs
 
 __all__ = [
     '__version__',
@@ -63,7 +63,7 @@ __all__ = [
     # accumulate
     'accu', 'aggmax', 'combine_rasters', 'load_chunked_dataset',
     # output
-    'write_max_tifs',
+    'max_tif_glob', 'max_tif_name', 'write_max_tifs',
     # composite
     'composite_max',
     'composite_max_with_time',

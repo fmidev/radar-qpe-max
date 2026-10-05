@@ -1,4 +1,5 @@
 import datetime
+from glob import glob
 from pathlib import Path
 
 import h5py
@@ -20,7 +21,9 @@ from qpemax.grid import (
     _grid_to_dataset, _z_r_qpe, create_grid, get_nod, qpe_grid_caching,
     read_odim_h5, save_precip_grid, sweep_start_datetime,
 )
-from qpemax.output import _write_dat_attrs, _write_dat_tif, _write_dattime_attrs
+from qpemax.output import (
+    _write_dat_attrs, _write_dat_tif, _write_dattime_attrs, max_tif_glob, max_tif_name,
+)
 from qpemax.utils import acc_cache_fname, corr_suffix, two_day_glob
 
 
@@ -109,6 +112,64 @@ def test_acc_cache_fname():
         '20240528filuo2048px250m32ch_acc1d.nc'
     assert acc_cache_fname(date, 'filuo', 2048, 250, '_c', 32, '1D') == \
         '20240528filuo2048px250m_c32ch_acc1d.nc'
+
+
+@pytest.mark.parametrize('nod, product, win, resolution, dbz_field, expected', [
+    ('fikor', 'max', '1h', 250, 'DBZH',
+     '202610050000_fikor_max_1h_acrr_finrad250_raw.tif'),
+    ('fikor', 'maxtime', '1 D', 250, 'DBZHC',
+     '202610050000_fikor_maxtime_24h_acrr_finrad250_rawac.tif'),
+    ('composite', 'max', '1H', 250, 'DBZH',
+     '202610050000_composite_max_1h_acrr_finrad250_raw.tif'),
+    ('composite', 'maxtime', '1D', 500.0, 'DBZHC',
+     '202610050000_composite_maxtime_24h_acrr_finrad500_rawac.tif'),
+    ('fivih', 'max', '24h', 500, 'DBZH',
+     '202610050000_fivih_max_24h_acrr_finrad500_raw.tif'),
+])
+def test_max_tif_name(nod, product, win, resolution, dbz_field, expected):
+    for date in (datetime.date(2026, 10, 4), datetime.datetime(2026, 10, 4)):
+        name = max_tif_name(date, nod, product, win, resolution, dbz_field)
+        assert name == expected
+        assert len(name.removesuffix('.tif').split('_')) == 7
+
+
+@pytest.mark.parametrize('date, ts', [
+    (datetime.date(2026, 1, 31), '202602010000'),
+    (datetime.date(2025, 12, 31), '202601010000'),
+    (datetime.date(2028, 2, 28), '202802290000'),
+])
+def test_max_tif_name_end_of_day(date, ts):
+    assert max_tif_name(date, 'fikor', 'max', '1h', 250).startswith(ts + '_')
+
+
+@pytest.mark.parametrize('kws', [
+    dict(win='90min'), dict(win='0h'), dict(nod='fi_kor'), dict(nod='fi.kor'),
+    dict(nod=''), dict(product='max_x'),
+])
+def test_max_tif_name_invalid(kws):
+    args = dict(nod='fikor', product='max', win='1h') | kws
+    with pytest.raises(ValueError):
+        max_tif_name(datetime.date(2026, 10, 4), resolution=250, **args)
+
+
+def test_max_tif_glob(tmp_path):
+    date = datetime.date(2026, 10, 4)
+    names = {
+        (nod, product, win, dbz): max_tif_name(date, nod, product, win, 250, dbz)
+        for nod in ('fikor', 'fivih', 'composite')
+        for product in ('max', 'maxtime')
+        for win in ('1h', '24h')
+        for dbz in ('DBZH', 'DBZHC')
+    }
+    for name in names.values():
+        (tmp_path / name).touch()
+    pattern = max_tif_glob(date, '1 D', 250, 'DBZH')
+    assert pattern == '202610050000_*_max_24h_acrr_finrad250_raw.tif'
+    found = {
+        Path(p).name for p in glob(str(tmp_path / pattern))
+        if '_composite_' not in p
+    }
+    assert found == {names[(nod, 'max', '24h', 'DBZH')] for nod in ('fikor', 'fivih')}
 
 
 def test_write_dat_attrs():

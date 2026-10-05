@@ -16,6 +16,7 @@ from qpemax import (
     combine_rasters,
     composite_max,
     aggmax,
+    max_tif_glob,
     write_max_tifs,
     __version__)
 from qpemax.logs import streamlogger_setup
@@ -113,6 +114,10 @@ def winmax(
     if resolution is None:
         resolution = autoresolution(size)
     date = datetime.datetime.strptime(yyyymmdd, DATEFMT)
+    try:  # fail fast on windows that cannot be expressed in output filenames
+        max_tif_glob(date, window, resolution, dbz_field)
+    except ValueError as e:
+        raise click.BadParameter(str(e), param_hint='--window') from e
     h5paths, _ = two_day_glob(date, globfmt=input_glob)
     nod = generate_individual_rasters(
         h5paths, resultsdir=output_dir, cachedir=cache_dir,
@@ -130,7 +135,7 @@ def winmax(
     dat, dattime = aggmax(accfile, attrs, p_chunksize=chunksize)
     write_max_tifs(
         dat, dattime, date, resultsdir=output_dir, nod=nod, win=window,
-        size=size, resolution=resolution
+        dbz_field=dbz_field, resolution=resolution
     )
     if list_obsolete:
         print(json.dumps(nc_obsolete))
